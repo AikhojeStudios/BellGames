@@ -1,24 +1,27 @@
 /* =====================================================================
    Going on an Adventure — engine
-   A top-down tile world on a handheld-style screen (160×144, four
-   greens). Walk around, talk to people, read signs, and meet critters
-   in the tall grass. Critters become friends when you answer their
-   math questions. Art lives in art.js, places and people in world.js.
+   Walk around the neighborhood, talk to people, read signs, and meet
+   critters in the tall grass. Critters become friends when you answer
+   their math questions.
+     draw.js   pictures (your drawings, or placeholder doodles)
+     world.js  maps, people, critters and questions
+   The world is drawn on a canvas; talking, menus and the Critter Book
+   are regular page elements on top, so they can be tapped directly.
    ===================================================================== */
 (function () {
   "use strict";
   const { h, pick, randInt } = App.util;
-  const { draw, get, PALETTE: P } = App.Adventure.art;
-  const { TILES, CRITTERS, MAPS, START, makeQuestion } = App.Adventure.world;
+  const AD = App.Adventure;
+  const D = AD.draw;
+  const { TILES, CRITTERS, MAPS, START, makeQuestion } = AD.world;
 
-  const W = 160, H = 144, T = 16, SCALE = 4;
-  const STEP = 14;           // frames to walk one tile
-  const NPC_STEP = 22;       // people stroll a bit slower
-  const FONT = '8px "Press Start 2P", ui-monospace, monospace';
-  const LINE = 18;           // characters per line of text
-  const FRIENDS_NEEDED = 3;  // right answers to make a friend
-  const BORED_LIMIT = 3;     // wrong answers before a critter leaves
-  const ENCOUNTER_RATE = 0.14;
+  const STEP = 14;            // frames to walk one tile
+  const NPC_STEP = 22;        // people stroll a bit slower
+  const LINE = 30;            // characters per line of talking
+  const LINES = 3;            // lines per page of talking
+  const FRIENDS_NEEDED = 3;   // right answers to make a friend
+  const BORED_LIMIT = 3;      // wrong answers before a critter leaves
+  const ENCOUNTER_RATE = 0.09;
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const OPPOSITE = { up: "down", down: "up", left: "right", right: "left" };
   const KEYS = {
@@ -50,43 +53,27 @@
     if (line) lines.push(line);
     return lines;
   }
-  /** Each message becomes one or more two-line pages. */
   const paginate = (texts) => [].concat(texts).flatMap((t) => {
     const lines = wrap(t);
     const out = [];
-    for (let i = 0; i < lines.length; i += 2) out.push(lines.slice(i, i + 2));
+    for (let i = 0; i < lines.length; i += LINES) out.push(lines.slice(i, i + LINES).join("\n"));
     return out;
   });
 
-  /** A solid dark copy of a sprite, for critters you've seen but not befriended. */
-  const shadows = {};
-  function shadow(name) {
-    if (shadows[name]) return shadows[name];
-    const src = get(name);
-    const c = document.createElement("canvas");
-    c.width = src.width; c.height = src.height;
-    const x = c.getContext("2d");
-    x.drawImage(src, 0, 0);
-    x.globalCompositeOperation = "source-in";
-    x.fillStyle = P[2];
-    x.fillRect(0, 0, c.width, c.height);
-    return (shadows[name] = c);
-  }
-
   const tone = (...a) => App.Sound.tone(...a);
   const sfx = {
-    bump: () => tone(110, 0.08, "square", 0.08),
-    door: () => { tone(330, 0.08, "square", 0.08); tone(220, 0.1, "square", 0.08, 0.08); },
-    blip: () => tone(880, 0.04, "square", 0.06),
-    meet: () => [392, 523, 659, 523, 784].forEach((f, i) => tone(f, 0.1, "square", 0.08, i * 0.08)),
-    right: () => [659, 784, 1046].forEach((f, i) => tone(f, 0.12, "square", 0.09, i * 0.08)),
+    bump: () => tone(140, 0.07, "triangle", 0.1),
+    door: () => { tone(520, 0.08, "triangle", 0.1); tone(390, 0.1, "triangle", 0.1, 0.08); },
+    blip: () => tone(880, 0.04, "triangle", 0.07),
+    meet: () => [392, 523, 659, 523, 784].forEach((f, i) => tone(f, 0.1, "triangle", 0.12, i * 0.08)),
+    right: () => [659, 784, 1046].forEach((f, i) => tone(f, 0.12, "triangle", 0.12, i * 0.08)),
   };
 
   /* ================================================================== */
   const Adventure = {
     id: "adventure",
     title: "Going on an Adventure",
-    tagline: "Explore & make critter friends",
+    tagline: "Explore the neighborhood & make critter friends",
     accent: "olive",
     wide: true, // gets a full-width tile on the home screen
     modes: {
@@ -95,78 +82,83 @@
       hard: { label: "Hard", tag: "Bigger numbers to 100" },
     },
 
-    /** Home-screen picture: a real little scene drawn with the game's own art. */
+    /** Home-screen picture, drawn with the game's own art. */
     art() {
-      const c = h("canvas", { class: "advart", width: 64, height: 32, "aria-hidden": "true" });
+      const dpr = 2, s = 32;
+      const c = h("canvas", { class: "advart", width: 4 * s * dpr, height: 2 * s * dpr, "aria-hidden": "true" });
       const x = c.getContext("2d");
-      x.fillStyle = P[0];
-      x.fillRect(0, 0, 64, 32);
-      [["grass", "tree"], ["grass", "grass"], ["tall", "tall"], ["tall", "tall"]].forEach(([top, bottom], i) => {
-        draw(x, top === "tree" ? "grass" : top, i * 16, 0);
-        draw(x, bottom, i * 16, 16);
-      });
-      draw(x, "tree", 0, 0);
-      draw(x, "path", 0, 16); draw(x, "path", 16, 16);
-      draw(x, "fizzbun", 38, 2);
-      x.drawImage(get("tall"), 0, 10, 16, 6, 32, 10, 16, 6);
-      x.drawImage(get("tall"), 0, 10, 16, 6, 48, 10, 16, 6);
-      draw(x, "hero_side", 17, 11, { flip: true });
+      x.scale(dpr, dpr);
+      for (let ty = 0; ty < 2; ty++) {
+        for (let tx = 0; tx < 4; tx++) D.ground(x, tx >= 2 ? "tall" : ty ? "sidewalk" : "lawn", tx >= 2 ? "," : ty ? ":" : ".", tx * s, ty * s, s, dpr, 0, tx + ty * 4);
+      }
+      D.object(x, "tree", "T", 0, 0, s, dpr, 0, 1);
+      D.person(x, "hero", "right", 1.5 * s, 1.85 * s, s, null, 0);
+      D.critter(x, "fizzbun", 3.1 * s, 1.55 * s, s * 0.95, 0.4, {});
+      D.ground(x, "tall", ",", 2 * s, 1.55 * s, s, dpr, 0, 9);
       return c;
     },
 
     /* ---------------- set up the screen ---------------- */
     mount(ui) {
-      this.canvas = h("canvas", { class: "lcd", width: W * SCALE, height: H * SCALE, "aria-label": "Adventure screen" });
+      this.canvas = h("canvas", { class: "advworld", "aria-label": "Adventure world" });
       this.ctx = this.canvas.getContext("2d");
 
-      const cross = h("div", { class: "cross", role: "group", "aria-label": "Direction pad" },
-        ["up", "left", "right", "down"].map((d) => h("span", { class: "arm " + d, "aria-hidden": "true" })),
-        h("span", { class: "hub", "aria-hidden": "true" }));
-      const btn = (name, label, cls) => h("button", { class: cls, type: "button", "aria-label": label, dataset: { btn: name }, text: name === "start" ? "START" : name.toUpperCase() });
+      this.hud = h("div", { class: "advhud", hidden: true },
+        this.hudName = h("b"), this.hudHearts = h("span", { class: "hearts", "aria-label": "Friendship" }));
+      this.talk = h("div", { class: "advtalk", hidden: true, role: "status", "aria-live": "polite", onclick: () => Input.press("a") },
+        this.talkText = h("p"), this.talkMore = h("span", { class: "more", "aria-hidden": "true", text: "▼" }));
+      this.menuEl = h("div", { class: "advmenu", hidden: true });
+      this.bookEl = h("div", { class: "advbook", hidden: true });
 
-      const shell = h("div", { class: "handheld" },
-        h("div", { class: "bezel" },
-          h("div", { class: "bezeltop" }, h("span", { class: "led", "aria-hidden": "true" }), h("span", { text: "• MEADOW SCREEN •" })),
-          this.canvas),
-        h("div", { class: "brand", "aria-hidden": "true" }, "Play & Learn ", h("b", { text: "Adventure" })),
-        h("div", { class: "controls" },
-          cross,
-          h("div", { class: "ab" }, btn("b", "B button", "round b"), btn("a", "A button", "round a"))),
-        h("div", { class: "startrow" }, btn("start", "Start: open menu", "pill")),
-        h("p", { class: "advhelp", text: "Arrows walk · A talks and picks · B goes back · START opens the menu" }));
-      ui.body.append(shell);
+      this.knob = h("span", { class: "knob" });
+      this.stick = h("div", { class: "joystick", role: "group", "aria-label": "Joystick: drag to walk" }, this.knob);
+      const button = (name, label, text) => h("button", { class: "padbtn " + name, type: "button", "aria-label": label, dataset: { btn: name }, text });
+      this.stage = h("div", { class: "advstage" },
+        this.canvas, this.hud,
+        this.stick,
+        button("b", "B: back", "B"),
+        button("a", "A: talk or choose", "A"),
+        button("start", "Menu", "☰"),
+        this.talk, this.menuEl, this.bookEl);
+      ui.body.append(this.stage);
 
-      // the cross: press and slide a finger to change direction
-      const setPad = (e) => {
-        const r = cross.getBoundingClientRect();
-        const dx = e.clientX - (r.left + r.width / 2);
-        const dy = e.clientY - (r.top + r.height / 2);
-        if (Math.hypot(dx, dy) < 10) return;
-        const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
-        if (d === this.padDir) return;
-        if (this.padDir) Input.release(this.padDir);
-        Input.hold(d);
-        this.padDir = d;
-        cross.dataset.dir = d;
+      // joystick: drag from the middle in any direction
+      const move = (e) => {
+        const r = this.stick.getBoundingClientRect();
+        const R = r.width / 2;
+        let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+        const dist = Math.hypot(dx, dy);
+        const k = dist > R * 0.6 ? (R * 0.6) / dist : 1;
+        this.knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+        const d = dist < R * 0.25 ? null : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        if (d === this.stickDir) return;
+        if (this.stickDir) Input.release(this.stickDir);
+        if (d) Input.hold(d);
+        this.stickDir = d;
       };
-      const clearPad = () => {
-        if (this.padDir) Input.release(this.padDir);
-        this.padDir = null;
-        delete cross.dataset.dir;
+      const end = () => {
+        this.knob.style.transform = "";
+        if (this.stickDir) Input.release(this.stickDir);
+        this.stickDir = null;
+        this.stick.classList.remove("on");
       };
-      cross.addEventListener("pointerdown", (e) => { e.preventDefault(); cross.setPointerCapture(e.pointerId); setPad(e); });
-      cross.addEventListener("pointermove", (e) => { if (cross.hasPointerCapture(e.pointerId)) setPad(e); });
-      ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => cross.addEventListener(ev, clearPad));
+      this.stick.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        this.stick.setPointerCapture(e.pointerId);
+        this.stick.classList.add("on");
+        move(e);
+      });
+      this.stick.addEventListener("pointermove", (e) => { if (this.stick.hasPointerCapture(e.pointerId)) move(e); });
+      ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => this.stick.addEventListener(ev, end));
 
-      shell.addEventListener("pointerdown", (e) => {
+      this.stage.addEventListener("pointerdown", (e) => {
         const b = e.target.closest("[data-btn]");
         if (!b) return;
         e.preventDefault();
         Input.press(b.dataset.btn);
       });
-      shell.addEventListener("contextmenu", (e) => e.preventDefault());
+      this.stage.addEventListener("contextmenu", (e) => e.preventDefault());
       window.addEventListener("blur", () => Input.clear());
-      document.fonts?.load(FONT).catch(() => {});
     },
 
     /* ---------------- start / stop ---------------- */
@@ -180,14 +172,13 @@
       this.loadMap(at.map, at.x, at.y, at.dir);
       this.scene = "world";
       this.dialog = this.menu = this.fade = this.battle = null;
-      this.grace = 0;
       this.tick = 0;
       Input.clear();
       this.updateProgress();
       if (!save) {
         this.say([
           "Welcome to GOING ON AN ADVENTURE!",
-          "Walk with the arrows. Press A to talk to people and read signs.",
+          "Drag the joystick to walk. Press A to talk to people and read signs.",
           "Go outside and look for critters in the tall grass!",
         ]);
       }
@@ -218,6 +209,7 @@
     onKey(e) {
       const k = KEYS[e.key] || KEYS[e.key.toLowerCase?.()];
       if (!k) return;
+      if (e.target.closest?.("button") && k === "a" && e.key !== "z") return; // let Enter/Space click a focused button
       e.preventDefault();
       if (DIRS[k]) Input.hold(k);
       else if (!e.repeat) Input.press(k);
@@ -233,15 +225,32 @@
       this.map = MAPS[id];
       this.player = { x, y, fromX: x, fromY: y, dir, moving: false, t: 0, leg: 0, turn: 0, chain: false, bumpWait: 0 };
       this.people = (this.map.people || []).map((p) => ({
-        ...p, home: { x: p.x, y: p.y }, fromX: p.x, fromY: p.y, moving: false, t: 0, leg: 0, wait: randInt(60, 200),
+        ...p, home: { x: p.x, y: p.y }, fromX: p.x, fromY: p.y, moving: false, t: 0, wait: randInt(60, 200),
+      }));
+      this.grace = 2;
+      this.labelHouses();
+    },
+
+    /** Give each house (a joined-up group of house tiles) its own colours. */
+    labelHouses() {
+      const rows = this.map.tiles;
+      this.houseOf = rows.map((r) => [...r].map(() => -1));
+      let n = 0;
+      rows.forEach((r, y) => [...r].forEach((ch, x) => {
+        if (ch !== "h" || this.houseOf[y][x] >= 0) return;
+        const stack = [[x, y]];
+        while (stack.length) {
+          const [cx, cy] = stack.pop();
+          if (rows[cy]?.[cx] !== "h" || this.houseOf[cy][cx] >= 0) continue;
+          this.houseOf[cy][cx] = n;
+          stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+        }
+        n++;
       }));
     },
 
-    tileAt(x, y) {
-      const ch = this.map.tiles[y]?.[x] ?? this.map.border;
-      return TILES[ch] || TILES[this.map.border];
-    },
-
+    charAt(x, y) { return this.map.tiles[y]?.[x] ?? this.map.border; },
+    tileAt(x, y) { return TILES[this.charAt(x, y)] || TILES[this.map.border]; },
     personAt(x, y) { return this.people.find((p) => p.x === x && p.y === y); },
 
     blocked(x, y, who) {
@@ -259,6 +268,7 @@
       this.last = now;
       while (this.acc >= 1000 / 60) { this.update(); this.acc -= 1000 / 60; }
       this.render();
+      this.syncUI();
     },
 
     update() {
@@ -267,7 +277,7 @@
         const f = this.fade;
         f.t++;
         if (f.phase === "out" && f.t >= f.dur) { f.fn(); f.phase = "in"; f.t = 0; }
-        else if (f.phase === "in" && f.t >= 12) this.fade = null;
+        else if (f.phase === "in" && f.t >= 14) this.fade = null;
         Input.pressed.clear();
         return;
       }
@@ -280,9 +290,8 @@
       Input.pressed.clear();
     },
 
-    /** Fade out, run fn (switch map or scene), fade back in. */
-    transition(fn, { color = 0, flash = false } = {}) {
-      this.fade = { t: 0, dur: flash ? 30 : 12, phase: "out", fn, color, flash };
+    transition(fn, { flash = false } = {}) {
+      this.fade = { t: 0, dur: flash ? 30 : 14, phase: "out", fn, flash };
     },
 
     /* ---------------- walking ---------------- */
@@ -306,8 +315,7 @@
         if (!p.chain) { p.turn = 5; return; } // a quick tap just turns around
       }
       if (p.turn > 0) { p.turn--; return; }
-      const [dx, dy] = DIRS[d];
-      const nx = p.x + dx, ny = p.y + dy;
+      const nx = p.x + DIRS[d][0], ny = p.y + DIRS[d][1];
       if (this.blocked(nx, ny, p)) {
         p.chain = false;
         if (!p.bumpWait) { sfx.bump(); p.bumpWait = 18; }
@@ -318,7 +326,7 @@
       p.moving = true; p.t = 0; p.leg ^= 1;
     },
 
-    /** Called when the player finishes a step. Returns true if a warp or critter took over. */
+    /** Called when the player finishes a step. Returns true if a door or critter took over. */
     arrive() {
       const p = this.player;
       const warp = (this.map.warps || []).find((w) => w.x === p.x && w.y === p.y);
@@ -343,11 +351,11 @@
         const d = pick(Object.keys(DIRS));
         n.dir = d;
         const nx = n.x + DIRS[d][0], ny = n.y + DIRS[d][1];
-        if (Math.abs(nx - n.home.x) > 2 || Math.abs(ny - n.home.y) > 2) continue;
+        if (Math.abs(nx - n.home.x) > 3 || Math.abs(ny - n.home.y) > 3) continue;
         if (this.blocked(nx, ny, n) || this.tileAt(nx, ny).grass) continue;
         if ((this.map.warps || []).some((w) => w.x === nx && w.y === ny)) continue;
         n.fromX = n.x; n.fromY = n.y; n.x = nx; n.y = ny;
-        n.moving = true; n.t = 0; n.leg ^= 1;
+        n.moving = true; n.t = 0;
       }
     },
 
@@ -370,10 +378,10 @@
 
     updateDialog() {
       const d = this.dialog;
-      const total = d.pages[d.i].join("").length;
+      const total = d.pages[d.i].length;
       const skip = Input.take("a") || Input.take("b");
       if (d.shown < total) {
-        d.shown = skip ? total : Math.min(total, d.shown + 0.75);
+        d.shown = skip ? total : Math.min(total, d.shown + 1.1);
         return;
       }
       if (!skip) return;
@@ -387,15 +395,20 @@
     },
 
     /* ---------------- menus ---------------- */
-    openMenu(menu) { this.menu = { i: 0, cols: 1, ...menu }; },
+    openMenu(menu) {
+      this.menu = { i: 0, cols: 1, ...menu };
+      this.menuDirty = true;
+    },
 
     updateMenu() {
       const m = this.menu;
       const n = m.items.length;
+      const before = m.i;
       if (Input.take("up")) m.i = Math.max(0, m.i - m.cols);
       if (Input.take("down")) m.i = Math.min(n - 1, m.i + m.cols);
       if (m.cols > 1 && Input.take("left") && m.i % m.cols > 0) m.i--;
       if (m.cols > 1 && Input.take("right") && m.i % m.cols < m.cols - 1 && m.i < n - 1) m.i++;
+      if (m.i !== before) sfx.blip();
       if (Input.take("a")) { sfx.blip(); m.onPick(m.i); return; }
       if ((Input.take("b") || Input.take("start")) && m.onBack) { sfx.blip(); m.onBack(); }
     },
@@ -404,11 +417,12 @@
       sfx.blip();
       this.save();
       this.openMenu({
-        items: ["CRITTERS", "CLOSE"],
-        box: { x: 72, y: 0, w: 88, h: 48 },
+        kind: "start",
+        title: "Menu",
+        items: ["Critter Book", "Close"],
         onPick: (i) => {
           this.menu = null;
-          if (i === 0) this.scene = "book";
+          if (i === 0) { this.scene = "book"; this.bookDirty = true; }
         },
         onBack: () => { this.menu = null; },
       });
@@ -425,27 +439,26 @@
       this.transition(() => {
         this.scene = "battle";
         this.battle = { id, c: CRITTERS[id], hearts: 0, bored: 0, phase: "intro", slide: 0, hop: 0, shake: 0 };
-      }, { color: 3, flash: true });
+      }, { flash: true });
     },
 
     updateBattle() {
       const b = this.battle;
       if (b.hop > 0) b.hop--;
       if (b.shake > 0) b.shake--;
-      if (b.phase === "intro") {
-        if (++b.slide >= 40) {
-          b.phase = "talk";
-          this.say([`A wild ${b.c.name} appeared!`], () => this.battleMenu());
-        }
+      if (b.phase === "intro" && ++b.slide >= 40) {
+        b.phase = "talk";
+        this.say([`A wild ${b.c.name} appeared!`], () => this.battleMenu());
       }
     },
 
     battleMenu() {
       this.battle.phase = "menu";
       this.openMenu({
-        items: ["ANSWER", "RUN"],
-        box: { x: 88, y: 96, w: 72, h: 48 },
-        prompt: ["What will", "you do?"],
+        kind: "battle",
+        title: "What will you do?",
+        items: ["Answer", "Run"],
+        cols: 2,
         onPick: (i) => {
           this.menu = null;
           if (i === 0) this.askQuestion();
@@ -458,10 +471,10 @@
       const q = makeQuestion(this.mode);
       this.battle.q = q;
       this.openMenu({
+        kind: "answers",
+        title: q.text,
         items: q.choices.map(String),
         cols: 2,
-        box: { x: 0, y: 96, w: 160, h: 48 },
-        question: q.text,
         onPick: (i) => { this.menu = null; this.answer(q.choices[i]); },
         onBack: () => { this.menu = null; this.battleMenu(); },
       });
@@ -502,189 +515,209 @@
     },
 
     endBattle() {
-      this.grace = 3;
-      this.transition(() => { this.scene = "world"; this.battle = null; });
+      this.transition(() => { this.scene = "world"; this.battle = null; this.grace = 3; });
     },
 
-    /* ================= drawing ================= */
+    /* ================= drawing the canvas ================= */
+    fit() {
+      const w = this.stage.clientWidth, hh = this.stage.clientHeight;
+      const dpr = Math.min(3, window.devicePixelRatio || 1);
+      if (w !== this.W || hh !== this.H || dpr !== this.dpr) {
+        this.W = w; this.H = hh; this.dpr = dpr;
+        this.canvas.width = Math.round(w * dpr);
+        this.canvas.height = Math.round(hh * dpr);
+        const T = Math.max(40, Math.min(64, Math.round(w / 9)));
+        if (T !== this.T) { this.T = T; AD.draw && AD.clearCache(); }
+      }
+      return w > 0;
+    },
+
     render() {
+      if (!this.fit()) return;
       const c = this.ctx;
-      c.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-      c.imageSmoothingEnabled = false;
-      c.fillStyle = P[0];
-      c.fillRect(0, 0, W, H);
-      if (this.scene === "world") this.drawWorld();
-      else if (this.scene === "battle") this.drawBattle();
-      else if (this.scene === "book") this.drawBook();
-      if (this.menu) this.drawMenu();
-      if (this.dialog) this.drawDialog();
+      c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      c.imageSmoothingEnabled = true;
+      c.fillStyle = D.C.dark;
+      c.fillRect(0, 0, this.W, this.H);
+      if (this.scene === "battle") this.drawBattle();
+      else this.drawWorld();
       if (this.fade) this.drawFade();
     },
 
     drawWorld() {
-      const c = this.ctx;
+      const c = this.ctx, T = this.T, W = this.W, H = this.H, dpr = this.dpr;
+      const t = this.tick / 60;
       const p = this.player;
       const pos = (e, dur) => {
         const k = e.moving ? e.t / dur : 1;
-        return { x: (e.fromX + (e.x - e.fromX) * k) * T, y: (e.fromY + (e.y - e.fromY) * k) * T };
+        return { x: e.fromX + (e.x - e.fromX) * k, y: e.fromY + (e.y - e.fromY) * k };
       };
       const pp = pos(p, STEP);
-      const camX = Math.round(pp.x - 64);
-      const camY = Math.round(pp.y - 64);
-      const x0 = Math.floor(camX / T), y0 = Math.floor(camY / T);
-      const frame = Math.floor(this.tick / 32) % 2;
+      const camX = Math.round(pp.x * T + T / 2 - W / 2);
+      const camY = Math.round(pp.y * T + T / 2 - H * 0.46);
+      const x0 = Math.floor(camX / T) - 1, x1 = Math.ceil((camX + W) / T) + 1;
+      const y0 = Math.floor(camY / T) - 1, y1 = Math.ceil((camY + H) / T) + 2;
 
-      for (let ty = y0; ty <= y0 + 9; ty++) {
-        for (let tx = x0; tx <= x0 + 10; tx++) {
-          const t = this.tileAt(tx, ty);
+      const same = (tx, ty, ch) => (dx, dy) => {
+        const o = this.charAt(tx + dx, ty + dy);
+        return ch === "h" ? o === "h" : o === ch;
+      };
+
+      // ground
+      const objects = [];
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          const ch = this.charAt(tx, ty);
+          const tile = TILES[ch];
           const sx = tx * T - camX, sy = ty * T - camY;
-          if (t.art == null) { c.fillStyle = P[3]; c.fillRect(sx, sy, T, T); continue; }
-          if (t.under) draw(c, t.under, sx, sy);
-          draw(c, Array.isArray(t.art) ? t.art[frame] : t.art, sx, sy);
+          const variant = AD.hash(tx, ty) % 4;
+          D.ground(c, tile.ground, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
+          if (tile.object) objects.push({ y: ty + 1, tx, ty, ch, tile, sx, sy, variant });
         }
       }
 
+      // things that stand up, and people, back to front
       const actors = [
         ...this.people.map((n) => ({ e: n, look: n.look, dur: NPC_STEP, at: pos(n, NPC_STEP) })),
         { e: p, look: "hero", dur: STEP, at: pp },
-      ].sort((a, b) => a.at.y - b.at.y);
-      for (const { e, look, dur, at } of actors) {
-        const sx = Math.round(at.x - camX), sy = Math.round(at.y - camY);
-        const side = e.dir === "left" || e.dir === "right";
-        const stepping = e.moving && e.t < dur / 2;
-        const name = `${look}_${side ? "side" : e.dir}${stepping ? "_step" : ""}`;
-        const flip = e.dir === "right" || (!side && stepping && e.leg === 1);
-        draw(c, name, sx, sy - 4, { flip });
-        // standing in tall grass hides your feet
-        if (!e.moving && this.tileAt(e.x, e.y).grass) {
-          c.drawImage(get("tall"), 0, 9, 16, 7, sx, sy + 9, 16, 7);
-        }
+      ];
+      const items = [
+        ...objects.map((o) => ({ y: o.y, draw: () => {
+          const house = o.ch === "h" ? this.houseOf[o.ty]?.[o.tx] ?? 0 : 0;
+          const info = { color: AD.hash(house, this.mapId.length) % AD.HOUSES.length, window: o.ch === "h" && AD.hash(o.tx, o.ty, 3) % 3 === 0 };
+          D.object(c, o.tile.object, o.ch, o.sx, o.sy, T, dpr, AD.maskOf(same(o.tx, o.ty, o.ch)), o.variant, info);
+        } })),
+        ...actors.map((a) => ({ y: a.at.y + 0.95, draw: () => this.drawActor(a, camX, camY, t) })),
+      ].sort((a, b) => a.y - b.y);
+      items.forEach((it) => it.draw());
+    },
+
+    drawActor({ e, look, dur, at }, camX, camY, t) {
+      const c = this.ctx, T = this.T;
+      const cx = at.x * T + T / 2 - camX;
+      const foot = at.y * T + T * 0.9 - camY;
+      const phase = e.moving ? (e.t / dur) * 0.5 + (e.leg ? 0.5 : 0) : null;
+      D.person(c, look, e.dir, cx, foot, T, phase, t);
+      // tall grass hides your feet
+      const gx = Math.round(at.x), gy = Math.round(at.y);
+      if (this.tileAt(gx, gy).grass) {
+        const sx = gx * T - camX, sy = gy * T - camY;
+        c.save();
+        c.beginPath(); c.rect(sx - T * 0.2, sy + T * 0.62, T * 1.4, T * 0.5); c.clip();
+        D.ground(c, "tall", ",", sx, sy, T, this.dpr, 0, AD.hash(gx, gy) % 4);
+        c.restore();
       }
     },
 
     drawBattle() {
-      const c = this.ctx;
-      const b = this.battle;
+      const c = this.ctx, W = this.W, H = this.H, b = this.battle;
+      const t = this.tick / 60;
+      // sky and ground
+      const sky = c.createLinearGradient(0, 0, 0, H * 0.55);
+      sky.addColorStop(0, "#BFE6F7"); sky.addColorStop(1, "#E9F7FB");
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      const r = D.rng(42);
+      D.blob(c, [[-20, H * 0.5], [W * 0.3, H * 0.46], [W * 0.7, H * 0.52], [W + 20, H * 0.47], [W + 20, H + 20], [-20, H + 20]], r, 8);
+      D.paint(c, D.C.tall, 2.5);
+      for (let i = 0; i < 18; i++) {
+        const x = r() * W, y = H * (0.55 + r() * 0.4), k = 10 + r() * 8;
+        c.beginPath(); c.moveTo(x - 4, y); c.quadraticCurveTo(x - 2, y - k / 2, x, y - k); c.moveTo(x + 4, y); c.quadraticCurveTo(x + 2, y - k / 2, x + 3, y - k * 0.8);
+        c.strokeStyle = D.C.blade; c.lineWidth = 2; c.lineCap = "round"; c.stroke();
+      }
+
       const k = Math.min(1, b.slide / 40);
       const ease = 1 - (1 - k) * (1 - k);
-
-      // ground spots
-      c.fillStyle = P[1];
-      c.beginPath(); c.ellipse(120, 56, 32, 7, 0, 0, Math.PI * 2); c.fill();
-      c.beginPath(); c.ellipse(40, 90, 34, 7, 0, 0, Math.PI * 2); c.fill();
-
+      const size = Math.min(W * 0.42, H * 0.3);
       // the critter
-      const hop = b.hop ? Math.sin(((24 - b.hop) / 24) * Math.PI * 2) * 6 : 0;
-      const shake = b.shake ? (b.shake % 6 < 3 ? -2 : 2) : 0;
-      draw(c, b.c.art, Math.round(104 + (1 - ease) * 90 + shake), Math.round(24 - Math.abs(hop)), { scale: 2 });
+      const ccx = W * 0.68 + (1 - ease) * W * 0.7 + (b.shake ? (b.shake % 6 < 3 ? -4 : 4) : 0);
+      const cbase = H * 0.42 - (b.hop ? Math.abs(Math.sin(((24 - b.hop) / 24) * Math.PI * 2)) * size * 0.15 : 0);
+      c.fillStyle = "rgba(60,110,40,.25)";
+      c.beginPath(); c.ellipse(W * 0.68 + (1 - ease) * W * 0.7, H * 0.42, size * 0.55, size * 0.12, 0, 0, Math.PI * 2); c.fill();
+      const blink = Math.floor(t * 10) % 32 === 0;
+      D.critter(c, b.id, ccx, cbase, size, t, { blink, happy: b.hearts > 0 || b.hop > 0 });
 
       // you, seen from behind
-      draw(c, "hero_up", Math.round(24 - (1 - ease) * 90), 58, { scale: 2 });
-
-      // name and friendship hearts
-      if (k >= 1) {
-        this.text(b.c.name, 8, 8);
-        for (let i = 0; i < FRIENDS_NEEDED; i++) draw(c, i < b.hearts ? "heart" : "heartEmpty", 8 + i * 11, 20);
-        c.fillStyle = P[3];
-        c.fillRect(6, 31, 66, 2);
-        c.fillRect(70, 27, 2, 6);
-      }
-      if (!this.dialog && !this.menu) this.box(0, 96, 160, 48);
-    },
-
-    drawBook() {
-      const c = this.ctx;
-      this.box(0, 0, 160, 144);
-      this.text("CRITTER BOOK", 8, 8);
-      const ids = Object.keys(CRITTERS);
-      this.text(`FRIENDS ${this.friends.size}/${ids.length}`, 8, 20, 2);
-      ids.forEach((id, i) => {
-        const cx = 8 + (i % 2) * 76;
-        const cy = 34 + Math.floor(i / 2) * 50;
-        c.fillStyle = P[1];
-        c.fillRect(cx, cy, 68, 46);
-        c.fillStyle = P[0];
-        c.fillRect(cx + 2, cy + 2, 64, 42);
-        const cr = CRITTERS[id];
-        if (this.friends.has(id)) {
-          draw(c, cr.art, cx + 18, cy + 4, { scale: 2 });
-        } else if (this.seen.has(id)) {
-          c.drawImage(shadow(cr.art), cx + 18, cy + 4, 32, 32);
-        } else {
-          this.text("?", cx + 30, cy + 16, 1);
-        }
-        const label = this.friends.has(id) ? cr.name : "???";
-        this.text(label, cx + 34 - label.length * 4, cy + 36, 3);
-      });
-      this.text("B: BACK", 96, 134, 2);
-    },
-
-    drawDialog() {
-      const d = this.dialog;
-      this.box(0, 96, 160, 48);
-      let left = Math.floor(d.shown);
-      d.pages[d.i].forEach((line, i) => {
-        const part = line.slice(0, Math.max(0, left));
-        left -= line.length;
-        this.text(part, 8, 106 + i * 16);
-      });
-      const done = d.shown >= d.pages[d.i].join("").length;
-      if (done && Math.floor(this.tick / 20) % 2 === 0) draw(this.ctx, "more", 146, 134);
-    },
-
-    drawMenu() {
-      const m = this.menu;
-      const { x, y, w, h: hh } = m.box;
-      if (m.prompt) {
-        this.box(0, 96, 88, 48);
-        m.prompt.forEach((line, i) => this.text(line, 8, 106 + i * 16));
-      }
-      this.box(x, y, w, hh);
-      if (m.question) {
-        this.text(m.question, 8, 103);
-        m.items.forEach((item, i) => {
-          const ix = 24 + (i % 2) * 72;
-          const iy = 118 + Math.floor(i / 2) * 13;
-          this.text(item, ix, iy);
-          if (i === m.i) draw(this.ctx, "cursor", ix - 11, iy);
-        });
-        return;
-      }
-      m.items.forEach((item, i) => {
-        const iy = y + 10 + i * 16;
-        this.text(item, x + 16, iy);
-        if (i === m.i) draw(this.ctx, "cursor", x + 6, iy);
-      });
+      const s = Math.min(W * 0.36, H * 0.24);
+      c.fillStyle = "rgba(60,110,40,.25)";
+      c.beginPath(); c.ellipse(W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s * 0.6, s * 0.12, 0, 0, Math.PI * 2); c.fill();
+      D.person(c, "hero", "up", W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s, null, t);
     },
 
     drawFade() {
-      const f = this.fade;
-      const c = this.ctx;
+      const f = this.fade, c = this.ctx;
       let a;
-      if (f.phase === "in") a = 1 - f.t / 12;
-      else if (f.flash && f.t < 18) a = Math.floor(f.t / 3) % 2 ? 0.9 : 0;
+      if (f.phase === "in") a = 1 - f.t / 14;
+      else if (f.flash && f.t < 18) a = Math.floor(f.t / 3) % 2 ? 0.85 : 0;
       else a = f.flash ? (f.t - 18) / (f.dur - 18) : f.t / f.dur;
       c.globalAlpha = Math.max(0, Math.min(1, a));
-      c.fillStyle = P[f.color];
-      c.fillRect(0, 0, W, H);
+      c.fillStyle = f.flash ? D.C.dark : "#FFFDF7";
+      c.fillRect(0, 0, this.W, this.H);
       c.globalAlpha = 1;
     },
 
-    /** A text box with the classic double border. */
-    box(x, y, w, hh) {
-      const c = this.ctx;
-      c.fillStyle = P[3]; c.fillRect(x, y, w, hh);
-      c.fillStyle = P[0]; c.fillRect(x + 2, y + 2, w - 4, hh - 4);
-      c.fillStyle = P[2]; c.fillRect(x + 3, y + 3, w - 6, hh - 6);
-      c.fillStyle = P[0]; c.fillRect(x + 4, y + 4, w - 8, hh - 8);
-    },
+    /* ================= page elements on top ================= */
+    syncUI() {
+      const busy = !!(this.dialog || this.menu || this.fade || this.scene !== "world");
+      this.stage.classList.toggle("busy", busy);
 
-    text(str, x, y, shade = 3) {
-      const c = this.ctx;
-      c.font = FONT;
-      c.textBaseline = "top";
-      c.fillStyle = P[shade];
-      c.fillText(str, x, y);
+      // talking
+      const d = this.dialog;
+      this.talk.hidden = !d;
+      if (d) {
+        const page = d.pages[d.i];
+        const text = page.slice(0, Math.floor(d.shown));
+        if (this.talkText.textContent !== text) this.talkText.textContent = text;
+        this.talkMore.hidden = d.shown < page.length;
+      }
+
+      // menus
+      const m = this.menu;
+      this.menuEl.hidden = !m || !!d;
+      if (m && this.menuDirty) {
+        this.menuDirty = false;
+        this.menuEl.dataset.kind = m.kind;
+        this.menuEl.replaceChildren(
+          h("p", { class: "mtitle", text: m.title }),
+          h("div", { class: "mitems", style: { "--cols": m.cols } },
+            m.items.map((it, i) => h("button", {
+              type: "button", class: "mitem", text: it,
+              onclick: () => { m.i = i; Input.press("a"); },
+            }))),
+          ...(m.onBack ? [h("button", { type: "button", class: "mback", text: "Back", onclick: () => Input.press("b") })] : []));
+      }
+      if (m) this.menuEl.querySelectorAll(".mitem").forEach((el, i) => el.classList.toggle("sel", i === m.i));
+
+      // friendship hearts while meeting a critter
+      const b = this.battle;
+      this.hud.hidden = !(this.scene === "battle" && b && b.slide >= 40);
+      if (!this.hud.hidden) {
+        this.hudName.textContent = b.c.name;
+        const hearts = "♥".repeat(b.hearts) + "♡".repeat(FRIENDS_NEEDED - b.hearts);
+        if (this.hudHearts.textContent !== hearts) this.hudHearts.textContent = hearts;
+      }
+
+      // critter book
+      this.bookEl.hidden = this.scene !== "book";
+      if (this.scene === "book" && this.bookDirty) {
+        this.bookDirty = false;
+        const ids = Object.keys(CRITTERS);
+        this.bookEl.replaceChildren(
+          h("div", { class: "bookhead" },
+            h("h2", { text: "Critter Book" }),
+            h("span", { text: `Friends: ${this.friends.size} of ${ids.length}` })),
+          h("div", { class: "bookgrid" }, ids.map((id) => {
+            const cr = CRITTERS[id];
+            const known = this.friends.has(id), met = this.seen.has(id);
+            const cv = h("canvas", { width: 240, height: 200 });
+            const x = cv.getContext("2d");
+            if (known) { x.scale(2, 2); D.critter(x, id, 60, 92, 76, 0.3, { happy: true }); }
+            else if (met) x.drawImage(D.silhouette(id, 240, 200, "#B9AE9B"), 0, 0);
+            return h("div", { class: "bookcard" + (known ? "" : " unknown") }, cv,
+              h("b", { text: known ? cr.name : "???" }),
+              h("small", { text: known ? cr.about : met ? "You've met this critter. Make friends to learn more!" : "Not found yet." }));
+          })),
+          h("button", { type: "button", class: "mback", text: "Back", onclick: () => Input.press("b") }));
+      }
     },
   };
 

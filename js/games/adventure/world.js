@@ -11,32 +11,32 @@
   const { randInt, pick, shuffle } = App.util;
 
   /* ---------- tile key ----------
-     art:   sprite name, or [frame1, frame2] for animated tiles
-     under: sprite drawn first (for see-through art like trees)
-     solid: can't walk onto it
-     grass: tall grass, where critters hide                     */
+     ground: how the floor of the tile is drawn (see GROUND in draw.js)
+     object: something standing on it, like a tree or a house (OBJECTS in draw.js)
+     solid:  can't walk onto it
+     grass:  tall grass, where critters hide                                   */
   const TILES = {
-    ".": { art: "grass" },
-    ",": { art: "tall", grass: true },
-    ":": { art: "path" },
-    "*": { art: ["flower", "flower2"], under: "grass" },
-    "T": { art: "tree", under: "grass", solid: true },
-    "~": { art: ["water", "water2"], solid: true },
-    "F": { art: "fence", under: "grass", solid: true },
-    "S": { art: "sign", under: "grass", solid: true },
-    "R": { art: "roof", solid: true },
-    "W": { art: "wall", solid: true },
-    "N": { art: "window", solid: true },
-    "D": { art: "door" },
-    "_": { art: "floor" },
-    "H": { art: "wallTop", solid: true },
-    "I": { art: "wallLow", solid: true },
-    "r": { art: "rug" },
-    "B": { art: "bed", under: "floor", solid: true },
-    "K": { art: "table", under: "floor", solid: true },
-    "P": { art: "plant", under: "floor", solid: true },
-    "M": { art: "mat", under: "floor" },
-    "X": { art: null, solid: true }, // darkness outside a room
+    ".": { ground: "lawn" },
+    ",": { ground: "tall", grass: true },
+    "=": { ground: "road" },
+    ":": { ground: "sidewalk" },
+    "d": { ground: "drive" },
+    "D": { ground: "porch" },
+    "*": { ground: "flowers" },
+    "~": { ground: "water", solid: true },
+    "T": { ground: "lawn", object: "tree", solid: true },
+    "F": { ground: "lawn", object: "fence", solid: true },
+    "S": { ground: "lawn", object: "sign", solid: true },
+    "h": { ground: "lawn", object: "house", solid: true },
+    "_": { ground: "floor" },
+    "H": { ground: "wallTop", solid: true },
+    "I": { ground: "wallLow", solid: true },
+    "r": { ground: "rug" },
+    "M": { ground: "mat" },
+    "B": { ground: "floor", object: "bed", solid: true },
+    "K": { ground: "floor", object: "table", solid: true },
+    "P": { ground: "floor", object: "plant", solid: true },
+    "X": { ground: "void", solid: true }, // darkness outside a room
   };
 
   /* ---------- critters ---------- */
@@ -62,11 +62,11 @@
         "________",
         "___M____",
       ],
-      warps: [{ x: 3, y: 7, to: "town", tx: 5, ty: 6, dir: "down" }],
+      warps: [{ x: 3, y: 7, to: "street", tx: 3, ty: 6, dir: "down" }],
       people: [
-        { x: 5, y: 3, look: "elder", dir: "down", talk: [
+        { x: 5, y: 3, look: "mom", dir: "down", talk: [
           "MOM: Going on an adventure? How exciting!",
-          "Critters hide in the tall grass. Answer their questions to make friends.",
+          "Critters hide in the tall grass in everyone's yards. Answer their questions to make friends.",
           "Be home for dinner!",
         ] },
       ],
@@ -85,84 +85,54 @@
         "_rr_____",
         "____M___",
       ],
-      warps: [{ x: 4, y: 7, to: "town", tx: 14, ty: 6, dir: "down" }],
+      warps: [{ x: 4, y: 7, to: "street", tx: 18, ty: 6, dir: "down" }],
       people: [
         { x: 5, y: 3, look: "elder", dir: "down", talk: [
-          "ROWAN: When I was little, I made friends with every critter in Sunny Meadow.",
-          "Can you find them all? Press START to look in your CRITTER BOOK.",
+          "ROWAN: When I was little, I made friends with every critter on this street.",
+          "Can you find them all? Tap the menu button to look in your CRITTER BOOK.",
         ] },
       ],
     },
 
-    town: {
-      name: "Willow Nook",
+    // A stand-in street until the real neighborhood map is ready.
+    street: {
+      name: "Our Street",
       border: "T",
       tiles: [
-        "TTTTTTTTT::TTTTTTTTT",
-        "TTTTTTTTT::TTTTTTTTT",
-        "TT.......::.......TT",
-        "TT.RRRR..::.RRRR..TT",
-        "TT.RRRR..::.RRRR..TT",
-        "TT.WNDW..::.WNDW..TT",
-        "TT...:...::...:...TT",
-        "TT.S.::::::::::...TT",
-        "TT...:........*...TT",
-        "TT.*.:...FFFFF....TT",
-        "TT...:...F~~~F.*..TT",
-        "TT,,,:...F~~~F....TT",
-        "TT,,,:...FFFFF....TT",
-        "TT,,,:............TT",
-        "TTTTTTTTTTTTTTTTTTTT",
-        "TTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTT",
+        "T,,,,,,,,,,,,,,,,,,,,T",
+        "T,hhhh,,,hhhhh,,hhhh,T",
+        "T,hhhh,,,hhhhh,,hhhh,T",
+        "T,hhhh,T,hhhhh,,hhhh,T",
+        "T,,D,,,,,,,D,,,,,,D,,T",
+        "T,,d,,*,,,,d,,*,,,d,,T",
+        "::::::::::::::::::::::",
+        "======================",
+        "======================",
+        "::::::::::::::::::::::",
+        "T,,,d,,,,,,d,,,,,,d,,T",
+        "T,,,D,,,,,,D,,,,,,D,,T",
+        "T,hhhhh,,hhhhh,,hhhh,T",
+        "T,hhhhh,,hhhhh,,hhhh,T",
+        "T,hhhhh,,hhhhh,,hhhh,T",
+        "T,,,,,,,,,S,,,,,,,,,,T",
+        "T,,*,,T,,,,,,,T,,,*,,T",
+        "TTTTTTTTTTTTTTTTTTTTTT",
       ],
       warps: [
-        { x: 5, y: 5, to: "home", tx: 3, ty: 6, dir: "up" },
-        { x: 14, y: 5, to: "rowan", tx: 4, ty: 6, dir: "up" },
-        { x: 9, y: 0, to: "meadow", tx: 9, ty: 12, dir: "up" },
-        { x: 10, y: 0, to: "meadow", tx: 10, ty: 12, dir: "up" },
+        { x: 3, y: 5, to: "home", tx: 3, ty: 6, dir: "up" },
+        { x: 18, y: 5, to: "rowan", tx: 4, ty: 6, dir: "up" },
       ],
-      signs: [{ x: 3, y: 7, text: ["WILLOW NOOK", "A cozy little town. North: Sunny Meadow."] }],
+      signs: [{ x: 10, y: 16, text: ["OUR STREET", "Watch out for critters in the tall grass!"] }],
       people: [
-        { x: 13, y: 8, look: "friend", dir: "left", wander: true, talk: [
-          "Hi! I saw a FIZZBUN hop into the tall grass over there!",
+        { x: 8, y: 7, look: "friend", dir: "left", wander: true, talk: [
+          "Hi! I saw a FIZZBUN hop into a yard over there!",
         ] },
-        { x: 7, y: 2, look: "friend", dir: "down", talk: [
-          "Up north is Sunny Meadow. Lots of critters live there!",
-        ] },
-      ],
-      critters: ["fizzbun", "fizzbun", "mossy"],
-    },
-
-    meadow: {
-      name: "Sunny Meadow",
-      border: "T",
-      tiles: [
-        "TTTTTTTTTTTTTTTTTTTT",
-        "TT,,,,,......,,,,,TT",
-        "TT,,,,,..*...,,,,,TT",
-        "TT,,,,,......,,,,,TT",
-        "TT......::::......TT",
-        "TT.~~~..:..:..*...TT",
-        "TT.~~~..:..:......TT",
-        "TT......:..:..,,,.TT",
-        "TT,,,...:..:..,,,.TT",
-        "TT,,,...::::..,,,.TT",
-        "TT,,,....::...,,,.TT",
-        "TT.......::.S.....TT",
-        "TT.*.....::...*...TT",
-        "TTTTTTTTT::TTTTTTTTT",
-      ],
-      warps: [
-        { x: 9, y: 13, to: "town", tx: 9, ty: 1, dir: "down" },
-        { x: 10, y: 13, to: "town", tx: 10, ty: 1, dir: "down" },
-      ],
-      signs: [{ x: 12, y: 11, text: ["SUNNY MEADOW", "The path north is still being built. Come back soon!"] }],
-      people: [
-        { x: 6, y: 11, look: "friend", dir: "right", wander: true, talk: [
+        { x: 14, y: 10, look: "friend", dir: "down", wander: true, talk: [
           "Critters get bored if you guess wrong. Take your time and think!",
         ] },
       ],
-      critters: ["fizzbun", "mossy", "mossy", "pebblet", "pebblet", "flitter"],
+      critters: ["fizzbun", "fizzbun", "mossy", "mossy", "pebblet", "pebblet", "flitter"],
     },
   };
 

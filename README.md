@@ -21,7 +21,7 @@ index.html          page shell (home screen and level picker)
 css/styles.css      all styles, grouped by section
 js/core.js          shared helpers: sound, saved stars, keypad, celebrations, snake drawing
 js/games/*.js       one file per game
-js/games/adventure/ the adventure game: art.js (pixel art), world.js (maps, people, critters), adventure.js (engine)
+js/games/adventure/ the adventure game: draw.js (pictures), world.js (maps, people, critters), adventure.js (engine)
 js/app.js           builds the screens and routes clicks and keys
 assets/coins/       coin pictures
 ```
@@ -42,13 +42,19 @@ assets/coins/       coin pictures
 
 ## Going on an Adventure
 
-A top-down tile world on a handheld-style screen (160×144 pixels, four shades of green). Walk around, talk to people, read signs, and meet critters in the tall grass. Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (press START). Progress is saved in the browser.
+Walk around the neighborhood, talk to people, read signs, and meet critters in the tall grass (every yard is tall grass). Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (the ☰ button). Progress is saved in the browser.
 
-Everything the world is made of is plain data, so it can grow without touching the engine:
+- **Pictures** (`js/games/adventure/draw.js`): every picture is either one of your hand-drawn PNGs or a placeholder doodle drawn in code. Add your drawings one at a time; anything not drawn yet keeps its placeholder.
+- **Maps, people, critters, questions** (`js/games/adventure/world.js`): maps are one character per tile, using the `TILES` key at the top of the file. Each map lists its `warps` (doors), `people` (where they stand, what they say, whether they wander), `signs`, and which `critters` live in its tall grass.
+- **Engine** (`js/games/adventure/adventure.js`): walking, talking, menus, meeting critters, the Critter Book and saving.
 
-- **Pixel art** (`js/games/adventure/art.js`): each picture is a grid of characters, `0`–`3` for the four greens (lightest to darkest) and `.` for see-through. Tiles and characters are 16×16.
-- **Maps** (`js/games/adventure/world.js`): one character per tile, using the `TILES` key at the top of the file. Each map lists its `warps` (doors and paths to other maps), `people` (where they stand, what they say, whether they wander), `signs`, and which `critters` live in its tall grass.
-- **Critters**: add an entry to `CRITTERS` and a 16×16 sprite with the same name in `art.js`, then list it in a map's `critters`.
-- **Questions**: `makeQuestion(mode)` in `world.js` decides what each level asks.
+### Adding hand-drawn art
 
-Keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M is START.
+Save drawings as PNG with a transparent background in `assets/adventure/`, then list them in `A.assets` at the top of `draw.js`:
+
+- **People**: one sheet per person, a grid of equal-sized frames. Each row is a direction (down, up, left; right is mirrored from left). Column 0 is standing; `walk` lists the walking frames in order. Keep the feet on the same line in every frame.
+- **Critters**: the main picture, plus optional eyes-closed (`blink`) and `happy` versions. The game adds bobbing, blinking, hopping and shaking.
+- **Ground tiles**: square pictures by map letter. Give a list to vary them so the ground doesn't look repeated.
+- **Objects** (trees, signs, furniture): by map letter, with a size in tiles. The bottom of the picture sits on its tile.
+
+Controls: drag the joystick to walk, A to talk and choose, B to go back, ☰ for the menu. On a keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M opens the menu.
