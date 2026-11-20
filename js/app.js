@@ -36,7 +36,7 @@
       ...Games.list.map((g) => {
         const stars = Progress.of(g.id);
         return h("button", {
-          class: "tile", type: "button", "data-action": "levels", "data-game": g.id,
+          class: "tile" + (g.wide ? " wide" : ""), type: "button", "data-action": "levels", "data-game": g.id,
           style: { "--accent": `var(--${g.accent})`, "--accent-deep": `var(--${g.accent}-deep)`, "--accent-soft": `var(--${g.accent}-soft)` },
         },
         h("div", { class: "tileart" }, g.art()),
@@ -146,6 +146,8 @@
     }
     activeGame?.onKey?.(e);
   });
+
+  document.addEventListener("keyup", (e) => activeGame?.onKeyUp?.(e));
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) activeGame?.pause?.();

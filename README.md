@@ -10,6 +10,7 @@ Money, counting and number games for young kids. Plain HTML, CSS and JavaScript 
 | **Number Path** | Filling in missing numbers, counting by 1, 2, 5 and 10 |
 | **Feed the Snake** | Matching numbers, before/after, bigger/smaller, simple sums |
 | **Snake Chase** | Steering a snake to eat numbers that fit a rule (even, odd, bigger than…) |
+| **Going on an Adventure** | Exploring a little world and making critter friends by answering adding and taking-away questions |
 
 Each game has Easy, Medium and Hard levels. Stars and the sound setting are saved in the browser.
 
@@ -20,6 +21,7 @@ index.html          page shell (home screen and level picker)
 css/styles.css      all styles, grouped by section
 js/core.js          shared helpers: sound, saved stars, keypad, celebrations, snake drawing
 js/games/*.js       one file per game
+js/games/adventure/ the adventure game: art.js (pixel art), world.js (maps, people, critters), adventure.js (engine)
 js/app.js           builds the screens and routes clicks and keys
 assets/coins/       coin pictures
 ```
@@ -37,3 +39,16 @@ assets/coins/       coin pictures
 - Feed the Snake: tap an apple, or type its number.
 - Snake Chase: arrow keys or WASD, swipe, tap the board, or use the on-screen arrows. Press Space to pause.
 - Esc goes back to the level picker.
+
+## Going on an Adventure
+
+A top-down tile world on a handheld-style screen (160×144 pixels, four shades of green). Walk around, talk to people, read signs, and meet critters in the tall grass. Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (press START). Progress is saved in the browser.
+
+Everything the world is made of is plain data, so it can grow without touching the engine:
+
+- **Pixel art** (`js/games/adventure/art.js`): each picture is a grid of characters, `0`–`3` for the four greens (lightest to darkest) and `.` for see-through. Tiles and characters are 16×16.
+- **Maps** (`js/games/adventure/world.js`): one character per tile, using the `TILES` key at the top of the file. Each map lists its `warps` (doors and paths to other maps), `people` (where they stand, what they say, whether they wander), `signs`, and which `critters` live in its tall grass.
+- **Critters**: add an entry to `CRITTERS` and a 16×16 sprite with the same name in `art.js`, then list it in a map's `critters`.
+- **Questions**: `makeQuestion(mode)` in `world.js` decides what each level asks.
+
+Keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M is START.
