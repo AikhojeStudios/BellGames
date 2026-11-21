@@ -57,6 +57,12 @@ Save drawings as PNG with a transparent background in `assets/adventure/`, then 
 - **Ground tiles**: square pictures by map letter. Give a list to vary them so the ground doesn't look repeated.
 - **Objects** (trees, signs, furniture): by map letter, with a size in tiles. The bottom of the picture sits on its tile.
 
+**Quests:** talk to Mom (in the kitchen) or Dad (in the living room) for a job. *Acorns for Hazel* and *Pecans for Pip* hide items in the tall grass near home; walk over them to collect, then bring them to the squirrel for 5 stars. While a quest is on, wild critters stay away. Quests are data in `QUESTS` in `world.js` (who gives it, the item, how many, the squirrel, and what everyone says), so more are easy to add.
+
+**Animal facts:** when you meet a critter, questions take turns between math and true facts about that animal (`FACTS` in `world.js`). A wrong answer shows the right one with a short explanation.
+
+**Our House** is one floor with a kitchen, dining room and living room; each room's name pops up as you walk in (`rooms` on the map).
+
 **Wagon:** a red wagon waits by Our House. Press A on it and little brother hops in; push him around (a bit faster than walking) while he cheers in speech bubbles. B parks it where you are; it won't go in water or indoors (it parks outside the door).  Uncle Pat's rowboat is tied up at the end of the dock. Face it and press A to climb in, steer around the water, then face the dock or shore and press B to step out; it stays where you leave it. **Sea routes:** a warp with `byBoat: true` only works when you sail onto it, and your boat comes along to the new map, so new places can be reached by water (there's an example in `world.js`).
 
 Controls: drag the joystick to walk, A to talk and choose, B to go back, ☰ for the menu. On a keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M opens the menu.

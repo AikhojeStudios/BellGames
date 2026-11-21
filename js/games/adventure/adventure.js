@@ -13,7 +13,7 @@
   const { h, pick, randInt } = App.util;
   const AD = App.Adventure;
   const D = AD.draw;
-  const { TILES, CRITTERS, MAPS, START, CATCHES, makeQuestion } = AD.world;
+  const { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, makeQuestion, makeFact } = AD.world;
 
   const STEP = 14;            // frames to walk one tile
   const BIKE_STEP = 8;        // frames to ride one tile
@@ -114,6 +114,8 @@
       this.talk = h("div", { class: "advtalk", hidden: true, role: "status", "aria-live": "polite", onclick: () => Input.press("a") },
         this.talkText = h("p"), this.talkMore = h("span", { class: "more", "aria-hidden": "true", text: "▼" }));
       this.menuEl = h("div", { class: "advmenu", hidden: true });
+      this.questEl = h("div", { class: "advquest", hidden: true, role: "status", "aria-live": "polite" });
+      this.roomEl = h("div", { class: "advroom", hidden: true });
       this.bookEl = h("div", { class: "advbook", hidden: true });
       this.fishEl = h("div", { class: "advfish", hidden: true },
         this.fishMsg = h("p", { role: "status", "aria-live": "polite" }),
@@ -129,7 +131,7 @@
         button("b", "B: back, or hop on and off your bike", "B"),
         button("a", "A: talk or choose", "A"),
         button("start", "Menu", "☰"),
-        this.fishEl, this.talk, this.menuEl, this.bookEl);
+        this.questEl, this.roomEl, this.fishEl, this.talk, this.menuEl, this.bookEl);
       ui.body.append(this.stage);
 
       // joystick: drag from the middle in any direction
@@ -186,6 +188,10 @@
       const fresh = (m) => !MAPS[m]?.layout || save?.layouts?.[m] === MAPS[m].layout;
       const at = save && MAPS[save.map] && fresh(save.map) ? save : START;
       if (this.bike && !fresh(this.bike.map)) this.bike = this.bikeHome();
+      // quests: the one you're on (with where its items are hidden), and the ones you've finished
+      this.quest = save?.quest && QUESTS[save.quest.id] && fresh(QUESTS[save.quest.id].map) ? save.quest : null;
+      this.questsDone = save?.questsDone || [];
+      this.room = null;
       // the wagon: parked somewhere (you start out walking)
       this.wagoning = false;
       this.wagon = save?.wagon && MAPS[save.wagon.map] && fresh(save.wagon.map) ? save.wagon : this.itemHome("wagon");
@@ -225,6 +231,7 @@
         map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir,
         friends: [...this.friends], seen: [...this.seen], hasBike: this.hasBike,
         boating: !!this.boating,
+        quest: this.quest, questsDone: this.questsDone,
         wagon: this.wagon || { map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir },
         boat: this.boat || { map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir },
         // while riding, the bike is wherever you are
@@ -290,6 +297,9 @@
       if (this.boat && this.boat.map === id) this.items.push({ kind: "boat", x: this.boat.x, y: this.boat.y, dir: this.boat.dir });
       if (this.boating && !this.tileAt(x, y).swim) this.boating = false;
       if (this.bike && this.bike.map === id) this.items.push({ kind: "bike", x: this.bike.x, y: this.bike.y });
+      this.pickups = (this.quest?.spots || []).filter((sp) => sp.map === id && !sp.got);
+      this.room = null;
+      if (this.tick != null) this.checkRoom();
       this.grace = 2;
       this.fx = [];
       this.swimX = null;
@@ -419,6 +429,114 @@
       p.ease = !this.boating && (this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim);
     },
 
+    /* ---------------- quests ---------------- */
+    talkParent(person) {
+      const who = person.parent, WHO = who.toUpperCase();
+      const q = this.quest, Q = q && QUESTS[q.id];
+      if (Q) {
+        if (Q.giver !== who) return this.say([`${WHO}: Finish helping ${Q.squirrelName} first, then come see me!`]);
+        if (q.have >= Q.need) return this.say([`${WHO}: You found them all! Go give them to ${Q.squirrelName}!`]);
+        return this.say([`${WHO}: How's it going? You've found ${q.have} of ${Q.need} ${Q.items}.`, Q.hint]);
+      }
+      const next = Object.keys(QUESTS).find((id) => QUESTS[id].giver === who && !this.questsDone.includes(id));
+      if (!next) {
+        const done = this.questsDone.filter((id) => QUESTS[id].giver === who).length;
+        return this.say(done ? [`${WHO}: Thanks for helping the squirrels. I'm so proud of you!`, ...person.talk.slice(1)] : person.talk);
+      }
+      const N = QUESTS[next];
+      this.say(N.offer, () => this.openMenu({
+        kind: "choice",
+        title: N.title,
+        items: ["Yes, I'll help!", "Not right now"],
+        onPick: (i) => {
+          this.menu = null;
+          if (i === 0) this.startQuest(next);
+          else this.say([`${WHO}: Okay! Come find me when you're ready.`]);
+        },
+        onBack: () => { this.menu = null; },
+      }));
+    },
+
+    startQuest(id) {
+      const Q = QUESTS[id];
+      this.quest = { id, have: 0, spots: this.hideItems(Q.map, Q.item, Q.need + 3) };
+      this.pickups = this.quest.spots.filter((sp) => sp.map === this.mapId);
+      this.save();
+      App.Sound.win();
+      this.say([Q.accept, `Quest started: ${Q.title}! While you're on it, wild critters will stay away.`]);
+    },
+
+    /** Hide quest items in the tall grass of a map's quest area, spread apart. */
+    hideItems(mapId, kind, n) {
+      const m = MAPS[mapId], area = m.questArea || { x0: 0, x1: m.tiles[0].length - 1 };
+      const spots = [];
+      const cand = [];
+      m.tiles.forEach((row, y) => [...row].forEach((ch, x) => {
+        if (ch !== "," || x < area.x0 || x > area.x1) return;
+        if ((m.people || []).some((p) => Math.abs(p.x - x) + Math.abs(p.y - y) < 2)) return;
+        // squirrels drop things under trees, so favor spots near one
+        let near = 0;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (m.tiles[y + dy]?.[x + dx] === "T") near = 1;
+        cand.push({ x, y, w: 1 + near * 2 });
+      }));
+      for (let tries = 0; spots.length < n && tries < 4000; tries++) {
+        const total = cand.reduce((a, c) => a + c.w, 0);
+        let r = Math.random() * total, c = cand[0];
+        for (const cc of cand) { r -= cc.w; if (r <= 0) { c = cc; break; } }
+        if (spots.every((sp) => Math.abs(sp.x - c.x) + Math.abs(sp.y - c.y) >= 6)) spots.push({ map: mapId, x: c.x, y: c.y, kind, got: false });
+      }
+      return spots;
+    },
+
+    collect(it) {
+      const Q = QUESTS[this.quest.id];
+      it.got = true;
+      this.pickups = this.pickups.filter((p) => p !== it);
+      this.quest.have = Math.min(Q.need, this.quest.have + 1);
+      [880, 1175].forEach((f, i) => tone(f, 0.08, "triangle", 0.12, i * 0.07));
+      this.fx.push({ kind: "ring", x: it.x + 0.5, y: it.y + 0.6, size: 0.6, life: 30, age: 0 });
+      this.save();
+      if (this.quest.have === Q.need) {
+        App.Sound.win();
+        this.say([`That's all ${Q.need} ${Q.items}!`, `Bring them to ${Q.squirrelName}.`]);
+      }
+    },
+
+    talkSquirrel(person) {
+      const q = this.quest, Q = q && QUESTS[q.id];
+      const NAME = person.squirrel.toUpperCase();
+      if (Q && Q.squirrel === person.squirrel) {
+        if (q.have >= Q.need) return this.finishQuest();
+        return this.say([`${NAME}: Chitter! You have ${q.have} ${Q.items}. I need ${Q.need}!`, Q.hint]);
+      }
+      const helped = Object.keys(QUESTS).some((id) => QUESTS[id].squirrel === person.squirrel && this.questsDone.includes(id));
+      if (helped) return this.say([`${NAME}: My friend! Thanks again for your help. Chitter chitter!`]);
+      this.say(person.talk);
+    },
+
+    finishQuest() {
+      const Q = QUESTS[this.quest.id];
+      this.questsDone.push(this.quest.id);
+      this.quest = null;
+      this.pickups = [];
+      for (let i = 0; i < QUEST_STARS; i++) this.ui.award({ celebrate: false });
+      App.Sound.win();
+      App.FX.celebrate(true, "Quest complete!");
+      this.save();
+      const left = Object.keys(QUESTS).filter((id) => !this.questsDone.includes(id));
+      this.say([...Q.thanks, `Quest complete! You earned ${QUEST_STARS} stars.`,
+        left.length ? `${QUESTS[left[0]].giver === "mom" ? "Mom" : "Dad"} might have another job for you.` : "You've finished every quest!"]);
+    },
+
+    /** Pop up the room's name when you walk into a new one. */
+    checkRoom() {
+      const p = this.player;
+      const room = (this.map.rooms || []).find((r) => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1);
+      const name = room ? room.name : null;
+      if (name && name !== this.room) this.roomToast = { text: name, until: this.tick + 100 };
+      this.room = name;
+    },
+
     /* ---------------- the wagon ---------------- */
     startWagon(wagon) {
       if (this.riding) return this.say(["Hop off your bike first! Press B."]);
@@ -534,13 +652,17 @@
         this.transition(() => { this.loadMap(warp.to, warp.tx, warp.ty, warp.dir); this.save(); });
         return true;
       }
+      const got = this.pickups.find((it) => it.x === p.x && it.y === p.y);
+      if (got) this.collect(got);
+      this.checkRoom();
       const here = this.tileAt(p.x, p.y);
       const wasSwimming = this.tileAt(p.fromX, p.fromY).swim;
       if (this.boating) { /* boats don't splash like swimmers */ }
       else if (here.swim && !wasSwimming) { this.splash(p.x + 0.5, p.y + 0.56, 14, 1); tone(240, 0.18, "sine", 0.12); tone(520, 0.12, "sine", 0.06, 0.05); }
       else if (!here.swim && wasSwimming && !this.justLeftBoat) this.splash(p.x + 0.5, p.y + 0.5, 5, 0.4);
       this.justLeftBoat = false;
-      const pool = this.boating ? null : here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
+      // no wild critters while boating or on a quest, so the quest stays the focus
+      const pool = this.boating || this.quest ? null : here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
       if (pool) {
         if (this.grace > 0) this.grace--;
         else if (Math.random() < ENCOUNTER_RATE) { this.startBattle(pick(pool), here.swim); return true; }
@@ -572,6 +694,8 @@
       if (person) {
         if (!person.moving) person.dir = OPPOSITE[p.dir];
         if (person.action === "fishing") return this.say(person.talk, () => this.fishingQuestion());
+        if (person.action === "parent") return this.talkParent(person);
+        if (person.action === "squirrel") return this.talkSquirrel(person);
         return this.say(person.talk);
       }
       const item = this.itemAt(fx, fy);
@@ -926,13 +1050,22 @@
     },
 
     askQuestion() {
-      const q = makeQuestion(this.mode);
+      // take turns between a math question and a fact about this critter
+      const b = this.battle;
+      b.asked = (b.asked || 0) + 1;
+      if (b.factFirst == null) b.factFirst = Math.random() < 0.5;
+      const wantFact = (b.asked % 2 === 1) === b.factFirst;
+      b.facts = b.facts || [];
+      const fact = wantFact ? makeFact(b.id, b.facts) : null;
+      if (fact) b.facts.push(fact.text);
+      const q = fact || makeQuestion(this.mode);
       this.battle.q = q;
       this.openMenu({
         kind: "answers",
+        facts: !!q.fact,
         title: q.text,
         items: q.choices.map(String),
-        cols: 2,
+        cols: q.fact ? 1 : 2,
         onPick: (i) => { this.menu = null; this.answer(q.choices[i]); },
         onBack: () => { this.menu = null; this.battleMenu(); },
       });
@@ -940,7 +1073,7 @@
 
     answer(v) {
       const b = this.battle;
-      const solved = b.q.text.replace("?", b.q.answer);
+      const solved = b.q.fact ? b.q.why : b.q.text.replace("?", b.q.answer);
       if (v === b.q.answer) {
         b.hearts++;
         b.hop = 24;
@@ -953,9 +1086,9 @@
       b.shake = 18;
       App.Sound.miss();
       if (b.bored >= BORED_LIMIT) {
-        return this.say([`Not quite. ${solved}`, `${b.c.name} got bored and wandered off.`], () => this.endBattle());
+        return this.say([`Not quite. ${b.q.fact ? `It's "${b.q.answer}". ` : ""}${solved}`, `${b.c.name} got bored and wandered off.`], () => this.endBattle());
       }
-      this.say([`Not quite. ${solved}`, "Let's try another one!"], () => this.battleMenu());
+      this.say([`Not quite. ${b.q.fact ? `It's "${b.q.answer}". ` : ""}${solved}`, "Let's try another one!"], () => this.battleMenu());
     },
 
     befriend() {
@@ -1060,6 +1193,8 @@
         } })),
         ...actors.map((a) => ({ y: a.at.y + 0.95, tx: Math.round(a.at.x), ty: Math.round(a.at.y), actor: true,
           cx: a.at.x * T + T / 2 - camX, base: a.at.y * T + T * 0.9 - camY, draw: (cc) => this.drawActor(a, camX, camY, t, cc) })),
+        ...this.pickups.map((it) => ({ y: it.y + 0.5, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.8 - camY,
+          draw: (cc) => D.pickup(cc, it.kind, it.x * T + T / 2 - camX, it.y * T + T * 0.6 - camY, T, t) })),
         ...this.items.map((it) => ({ y: it.y + 0.9, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.92 - camY,
           draw: (cc) => it.kind === "wagon"
             ? D.wagon(cc, it.x * T + T / 2 - camX, it.y * T + T * 0.9 - camY, T, it.dir || "right", t, null, false, null)
@@ -1354,6 +1489,7 @@
       if (m && this.menuDirty) {
         this.menuDirty = false;
         this.menuEl.dataset.kind = m.kind;
+        if (m.facts) this.menuEl.dataset.facts = "1"; else delete this.menuEl.dataset.facts;
         this.menuEl.replaceChildren(
           h("p", { class: "mtitle", text: m.title }),
           h("div", { class: "mitems", style: { "--cols": m.cols } },
@@ -1374,6 +1510,18 @@
         const hearts = "♥".repeat(b.hearts) + "♡".repeat(FRIENDS_NEEDED - b.hearts);
         if (this.hudHearts.textContent !== hearts) this.hudHearts.textContent = hearts;
       }
+
+      // the quest banner
+      const q = this.quest, Q = q && QUESTS[q.id];
+      this.questEl.hidden = !(Q && this.scene === "world");
+      if (!this.questEl.hidden) {
+        const text = q.have >= Q.need ? `${Q.icon} Bring them to ${Q.squirrelName}!` : `${Q.icon} ${Q.title}: ${q.have} / ${Q.need}`;
+        if (this.questEl.textContent !== text) this.questEl.textContent = text;
+      }
+      // room name
+      const rt = this.roomToast;
+      this.roomEl.hidden = !(rt && this.tick < rt.until && this.scene === "world" && !this.dialog);
+      if (!this.roomEl.hidden && this.roomEl.textContent !== rt.text) this.roomEl.textContent = rt.text;
 
       // fishing
       this.fishEl.hidden = !(this.scene === "fishing" && this.fish) || !!this.fade;

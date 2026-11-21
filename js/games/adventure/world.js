@@ -41,6 +41,16 @@
     "K": { ground: "floor", object: "table", solid: true },
     "P": { ground: "floor", object: "plant", solid: true },
     "X": { ground: "void", solid: true }, // darkness outside a room
+    // inside our house
+    "w": { ground: "innerWall", solid: true }, // walls between rooms
+    "k": { ground: "kitchen" },                // kitchen floor tiles
+    "c": { ground: "kitchen", object: "counter", solid: true },
+    "v": { ground: "kitchen", object: "stove", solid: true },
+    "f": { ground: "kitchen", object: "fridge", solid: true },
+    "n": { ground: "floor", object: "chair", solid: true },
+    "o": { ground: "floor", object: "sofa", solid: true },
+    "t": { ground: "floor", object: "tv", solid: true },
+    "b": { ground: "floor", object: "shelf", solid: true },
   };
 
   /* ---------- critters ---------- */
@@ -62,27 +72,41 @@
 
   /* ---------- maps ---------- */
   const MAPS = {
+    // Our house: one floor with a kitchen, dining room and living room.
     home: {
-      name: "Home",
+      name: "Our House",
       border: "X",
       indoors: true,
+      layout: "house-2",
       tiles: [
-        "HHHHHHHH",
-        "IIIIIIII",
-        "B______P",
-        "________",
-        "__rr____",
-        "__rrK___",
-        "________",
-        "___M____",
+        "HHHHHHHHHHHHHHHH",
+        "IIIIIIIIIIIIIIII",
+        "fcvccw__nnn____P",
+        "kkkkk___KKK_____",
+        "kkkkkw__KKK____P",
+        "kkkkkw__nnn_____",
+        "wwwww_wwwwww_www",
+        "bb____rrrr____tP",
+        "_____rrrrrr_____",
+        "_ooo_rrrrrr_____",
+        "P______________P",
+        "_______M________",
       ],
-      warps: [{ x: 3, y: 7, to: "crescent", tx: 0, ty: 0, dir: "down" }], // set by buildCrescent
+      rooms: [
+        { name: "Kitchen", x0: 0, y0: 2, x1: 4, y1: 5 },
+        { name: "Dining Room", x0: 5, y0: 2, x1: 15, y1: 5 },
+        { name: "Living Room", x0: 0, y0: 7, x1: 15, y1: 11 },
+      ],
+      warps: [{ x: 7, y: 11, to: "crescent", tx: 0, ty: 0, dir: "down" }], // set by buildCrescent
       people: [
-        { x: 5, y: 3, look: "mom", dir: "down", talk: [
+        { x: 2, y: 4, look: "mom", dir: "down", action: "parent", parent: "mom", talk: [
           "MOM: Off on a Garter Quest? How exciting!",
-          "Critters hide in the tall grass in everyone's yards on Crescent Drive. Answer their questions to make friends.",
-          "Your bike is right outside by the driveway, and your little brother wants a ride in the wagon!",
+          "Your bike is right outside, and your little brother wants a ride in the wagon!",
           "Gram lives just across the street. Be home for dinner!",
+        ] },
+        { x: 4, y: 8, look: "dad", dir: "down", action: "parent", parent: "dad", talk: [
+          "DAD: Hey, champ! Uncle Pat says the fish are biting down at the dock.",
+          "Critters hide in the tall grass. Answer their questions to make friends!",
         ] },
       ],
     },
@@ -143,6 +167,17 @@
     MAPS.home.warps[0].tx = sp.ours.land[0]; MAPS.home.warps[0].ty = sp.ours.land[1];
     MAPS.grams.warps[0].tx = sp.grams.land[0]; MAPS.grams.warps[0].ty = sp.grams.land[1];
     const ox = sp.ours.door[0];
+    // a free tall-grass tile near (x, y), for placing squirrels
+    const taken = new Set();
+    const grassNear = (x, y) => {
+      for (let r = 0; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const tx = x + dx, ty = y + dy;
+        if (G.tiles[ty]?.[tx] === "," && !taken.has(tx + "," + ty)) { taken.add(tx + "," + ty); return [tx, ty]; }
+      }
+      return [x, y];
+    };
+    const hazel = grassNear(ox - 5, sp.ours.land[1] - 2);
+    const pip = grassNear(sp.grams.door[0] + 5, sp.grams.land[1] + 3);
     // the wagon waits on the other side of our driveway from the bike
     const [lx, ly] = sp.ours.land;
     const wagonSpot = [[lx - 1, ly], [lx - 1, ly + 1], [lx + 1, ly + 1], [lx - 2, ly]].find(([x, y]) =>
@@ -154,7 +189,7 @@
       // the boat starts tied up at the dock; it's an item you can ride, so its tile is water
       tiles: G.tiles.map((row) => row.replace(/O/g, "~")),
       warps: [
-        { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 3, ty: 6, dir: "up" },
+        { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 7, ty: 10, dir: "up" },
         { x: sp.grams.door[0], y: sp.grams.door[1], to: "grams", tx: 4, ty: 6, dir: "up" },
       ],
       signs,
@@ -165,12 +200,22 @@
         { x: ox - 14, y: street - 1, look: "friend", dir: "right", wander: true, talk: [
           "Snakes like the tall grass near the creek. Some are really shy!",
         ] },
+        { x: hazel[0], y: hazel[1], look: "squirrel", dir: "right", action: "squirrel", squirrel: "hazel", talk: [
+          "HAZEL: Chitter chitter! Winter is coming and my pantry is empty!",
+          "Maybe your mom knows how you could help...",
+        ] },
+        { x: pip[0], y: pip[1], look: "squirrel", dir: "left", action: "squirrel", squirrel: "pip", talk: [
+          "PIP: Squeak! I'm Pip. I love pecans more than anything!",
+          "I bet your dad would have a job for a helper like you.",
+        ] },
         { x: sp.dock.pat[0], y: sp.dock.pat[1], look: "uncle", dir: "down", action: "fishing", talk: [
           "UNCLE PAT: Ahoy there, kiddo! You can take my boat out anytime. Just face it and press A.",
           "Want to go fishing?",
           "First you have to answer my math question!",
         ] },
       ],
+      // where quest items (acorns, nuts) get hidden: the yards near home
+      questArea: { x0: ox - 32, x1: ox + 32 },
       // things you can pick up
       items: [
         ...(sp.bike ? [{ x: sp.bike[0], y: sp.bike[1], kind: "bike" }] : []),
@@ -194,10 +239,107 @@
   }
   MAPS.crescent = buildCrescent();
 
+  /* ---------- quests ----------
+     A parent offers a quest. Items get hidden in the tall grass of the
+     quest area; walking over one picks it up. Bring them all to the
+     squirrel to finish. Critters stay away while a quest is on.        */
+  const QUESTS = {
+    acorns: {
+      title: "Acorns for Hazel", giver: "mom", squirrel: "hazel", squirrelName: "HAZEL",
+      item: "acorn", items: "acorns", icon: "🌰", need: 8, map: "crescent",
+      offer: ["MOM: The squirrels are getting ready for winter, and Hazel's pantry is empty!",
+        "Can you find 8 acorns in the yards and bring them to Hazel? She's in the yard down the street."],
+      accept: "MOM: Thank you, sweetie! Acorns hide in the tall grass. Look for the sparkles!",
+      hint: "Acorns hide in the tall grass. Look for the sparkles!",
+      thanks: ["HAZEL: Chitter chitter! 8 acorns! My pantry is full!", "Thank you, friend! Now I can sleep cozy all winter."],
+    },
+    nuts: {
+      title: "Pecans for Pip", giver: "dad", squirrel: "pip", squirrelName: "PIP",
+      item: "nut", items: "pecans", icon: "🥜", need: 6, map: "crescent",
+      offer: ["DAD: Pip the squirrel lost his pecans all over the neighborhood!",
+        "Can you find 6 pecans and bring them back to Pip? He's near Gram's house."],
+      accept: "DAD: That's my champ! Pecans fall in the tall grass. Keep your eyes peeled!",
+      hint: "Pecans fall in the tall grass. Look for the sparkles!",
+      thanks: ["PIP: Squeak squeak! My pecans! All 6 of them!", "You're the best helper on Crescent Drive!"],
+    },
+  };
+  const QUEST_STARS = 5;
+
+  /* ---------- animal facts ----------
+     Mixed in with math questions when you meet a critter. Every one is true. */
+  const FACTS = {
+    fizzbun: [
+      { q: "What do rabbits love to eat?", a: "Grass and hay", wrong: ["Fish", "Rocks", "Pizza"], why: "Rabbits munch grass, hay and leafy greens." },
+      { q: "Why do rabbits have such big ears?", a: "To hear danger far away", wrong: ["To fly", "To swim faster", "To dig holes"], why: "Big ears help rabbits hear danger and stay cool." },
+      { q: "What is a baby rabbit called?", a: "A kit", wrong: ["A puppy", "A cub", "A chick"], why: "Baby rabbits are called kits!" },
+    ],
+    squeaks: [
+      { q: "Why do mice have whiskers?", a: "To feel their way around", wrong: ["To look fancy", "To catch fish", "To keep warm"], why: "Whiskers help mice feel their way in the dark." },
+      { q: "What's special about a mouse's front teeth?", a: "They never stop growing", wrong: ["They glow", "They fall out every day", "They're made of gold"], why: "That's why mice chew so much: it keeps their teeth short!" },
+      { q: "When are mice most busy?", a: "At night", wrong: ["At lunchtime", "Only in winter", "Never"], why: "Mice are nocturnal. They come out at night." },
+    ],
+    sprigsnake: [
+      { q: "How does a snake smell things?", a: "With its tongue", wrong: ["With its ears", "With its tail", "With its eyes"], why: "Snakes flick their tongues to taste the air." },
+      { q: "What do green snakes like to eat?", a: "Bugs like crickets", wrong: ["Pizza", "Grass", "Rocks"], why: "Green snakes eat crickets, caterpillars and spiders." },
+      { q: "Why is a green snake green?", a: "To hide in the leaves", wrong: ["It ate paint", "It's cold", "To glow at night"], why: "Its green color is camouflage." },
+    ],
+    sootsnake: [
+      { q: "What are black rat snakes really good at?", a: "Climbing trees", wrong: ["Flying", "Swimming in the sea", "Digging tunnels"], why: "They can climb right up tree bark!" },
+      { q: "Are black rat snakes venomous?", a: "No, they're harmless", wrong: ["Yes, very", "Only on Tuesdays", "Only the babies"], why: "They're not venomous. They squeeze their food instead." },
+      { q: "How does a snake grow bigger?", a: "It sheds its skin", wrong: ["It pops", "It eats rocks", "It never grows"], why: "Snakes wiggle out of their old skin as they grow." },
+    ],
+    hoodini: [
+      { q: "What does a cobra do to look big?", a: "Spreads out its hood", wrong: ["Puffs up like a balloon", "Grows wings", "Sings loudly"], why: "A cobra spreads its neck into a hood to say 'back off!'" },
+      { q: "What should you do if you see a wild snake?", a: "Stay back and leave it alone", wrong: ["Give it a hug", "Pick it up", "Pet its head"], why: "Some snakes are venomous. Always keep your distance." },
+      { q: "Snakes have no outside ears. How do they 'hear'?", a: "They feel vibrations", wrong: ["With antennas", "With their nose", "They can't at all"], why: "Snakes feel vibrations through the ground." },
+    ],
+    finny: [
+      { q: "How do fish breathe underwater?", a: "With gills", wrong: ["With a snorkel", "They hold their breath", "With their fins"], why: "Gills take air out of the water." },
+      { q: "What helps a fish swim?", a: "Its fins and tail", wrong: ["Its whiskers", "Tiny feet", "Its teeth"], why: "Fish wiggle their tails and steer with their fins." },
+      { q: "What covers a fish's body?", a: "Scales", wrong: ["Feathers", "Fur", "Leaves"], why: "Slippery scales protect a fish." },
+    ],
+    pinchy: [
+      { q: "Which way do crabs walk?", a: "Sideways", wrong: ["Only backwards", "Upside down", "They hop"], why: "Crabs scuttle sideways." },
+      { q: "How many legs does a crab have?", a: "10, counting its claws", wrong: ["2", "4", "100"], why: "Crabs have 10 legs, and 2 of them are claws." },
+      { q: "Where is a crab's skeleton?", a: "On the outside, as a shell", wrong: ["In its claws only", "It has none", "In its eyes"], why: "Crabs wear their skeleton on the outside!" },
+    ],
+    shelby: [
+      { q: "Can a turtle climb out of its shell?", a: "No, it's part of its body", wrong: ["Yes, to take a bath", "Only at night", "Yes, to trade shells"], why: "A turtle's shell grows with it." },
+      { q: "Do turtles breathe air?", a: "Yes, they swim up for air", wrong: ["No, they have gills", "Only on Sundays", "They never breathe"], why: "Turtles come up to the surface to breathe." },
+      { q: "How do baby turtles start life?", a: "They hatch from eggs", wrong: ["They grow on trees", "They fall from clouds", "From a shell store"], why: "Mama turtles lay their eggs in sand or dirt." },
+    ],
+    bloop: [
+      { q: "Does a jellyfish have a brain?", a: "No, no brain at all", wrong: ["A huge brain", "Two brains", "A brain in its hat"], why: "Jellyfish have no brain, heart or bones!" },
+      { q: "What is a jellyfish mostly made of?", a: "Water", wrong: ["Jelly", "Rubber", "Candy"], why: "A jellyfish is about 95 out of 100 parts water!" },
+      { q: "Should you touch a jellyfish?", a: "No, it can sting", wrong: ["Yes, it's soft", "Only with your toes", "Yes, it tickles"], why: "Jellyfish can sting, even when they wash up on the beach." },
+    ],
+    flitter: [
+      { q: "When do most moths fly?", a: "At night", wrong: ["Only at noon", "Never", "Only in the rain"], why: "Most moths come out at night and love bright lights." },
+      { q: "What do moths smell with?", a: "Their antennae", wrong: ["Their wings", "Their feet", "Their nose"], why: "Moth antennae can smell from far away." },
+      { q: "What does a moth start life as?", a: "A caterpillar", wrong: ["A ladybug", "A worm", "A fish"], why: "Caterpillars spin cocoons and turn into moths." },
+    ],
+    mossy: [
+      { q: "Does moss grow flowers?", a: "No, it spreads with spores", wrong: ["Yes, big red ones", "Only in winter", "Yes, candy flowers"], why: "Moss spreads with tiny spores instead of seeds." },
+      { q: "Where does moss like to grow?", a: "Damp, shady places", wrong: ["In ovens", "On clouds", "In the hot desert sun"], why: "Moss loves cool, damp, shady spots." },
+    ],
+    pebblet: [
+      { q: "What slowly wears big rocks down into sand?", a: "Wind and water", wrong: ["Moonlight", "Singing", "Sleeping"], why: "Wind and water wear rocks down over a very long time." },
+      { q: "What is very hot melted rock called?", a: "Lava", wrong: ["Soup", "Ice", "Slime"], why: "Lava cools down and turns into new rock!" },
+    ],
+  };
+
+  /** A fact question about a critter, skipping ones already asked. */
+  function makeFact(id, asked = []) {
+    const list = (FACTS[id] || []).filter((f) => !asked.includes(f.q));
+    if (!list.length) return null;
+    const f = pick(list);
+    return { text: f.q, answer: f.a, choices: shuffle([f.a, ...f.wrong]), fact: true, why: f.why };
+  }
+
   /* What can bite on Uncle Pat's line. More copies = more often. */
   const CATCHES = ["finny", "finny", "finny", "finny", "pinchy", "pinchy", "shelby", "shelby", "bloop", "boot"];
 
-  const START = { map: "home", x: 3, y: 4, dir: "down" };
+  const START = { map: "home", x: 7, y: 10, dir: "up" };
 
   /* ---------- questions, by level ---------- */
   function makeQuestion(mode) {
@@ -223,5 +365,5 @@
     return { text: `${a} ${op} ${b} = ?`, answer, choices: shuffle([...choices]) };
   }
 
-  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, makeQuestion };
+  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, FACTS, makeQuestion, makeFact };
 })();

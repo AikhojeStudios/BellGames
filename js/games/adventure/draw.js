@@ -270,6 +270,27 @@
       blob(c, rectPts(s * 0.12, s * 0.2, s * 0.76, s * 0.55), r, s * 0.03); paint(c, "#6F9BC9", s * 0.035);
     },
     void(c, s) { c.fillStyle = C.dark; c.fillRect(0, 0, s, s); },
+    kitchen(c, s) {
+      const n = 4, q = s / n;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        c.fillStyle = (x + y) % 2 ? "#DCEBF2" : "#FFFFFF"; c.fillRect(x * q, y * q, q, q);
+      }
+    },
+    /** A wall between rooms, seen from above, with its face showing on the south side. */
+    innerWall(c, s, r, same) {
+      c.fillStyle = "#CDB892"; c.fillRect(0, 0, s, s);
+      if (!same(0, 1)) {
+        c.fillStyle = "#EADFC6"; c.fillRect(0, s * 0.55, s, s * 0.45);
+        c.fillStyle = C.base; c.fillRect(0, s * 0.9, s, s * 0.1);
+      }
+      c.strokeStyle = C.ink; c.lineWidth = s * 0.04;
+      c.beginPath();
+      if (!same(0, -1)) { c.moveTo(0, s * 0.02); c.lineTo(s, s * 0.02); }
+      if (!same(-1, 0)) { c.moveTo(s * 0.02, 0); c.lineTo(s * 0.02, s); }
+      if (!same(1, 0)) { c.moveTo(s * 0.98, 0); c.lineTo(s * 0.98, s); }
+      if (!same(0, 1)) { c.moveTo(0, s * 0.55); c.lineTo(s, s * 0.55); }
+      c.stroke();
+    },
   };
 
   /* ---------- objects (stand up off the ground; may spill over the tile above) ----------
@@ -351,6 +372,53 @@
       line(c, s * 0.6, s * 0.41, s * 0.6, s * 0.72, r, s * 0.01, s * 0.06, "#A4774A");
       line(c, -s * 0.34, s * 0.8, s * 0.88, s * 0.84, r, s * 0.01, s * 0.05, "#D9433B");
       line(c, -s * 0.42, s * 0.56, -s * 0.9, s * 0.4, r, s * 0.02, s * 0.025, "#8A6A4A");
+    },
+    counter(c, s, r, same) {
+      const x0 = same(-1, 0) ? -1 : s * 0.02, x1 = same(1, 0) ? s + 1 : s * 0.98;
+      c.fillStyle = "#B99A72"; c.fillRect(x0, s * 0.55, x1 - x0, s * 0.4);
+      c.fillStyle = "#EFE9DE"; c.fillRect(x0, s * 0.05, x1 - x0, s * 0.55);
+      c.strokeStyle = C.ink; c.lineWidth = s * 0.04; c.strokeRect(x0, s * 0.05, x1 - x0, s * 0.9);
+      c.beginPath(); c.moveTo(x0, s * 0.6); c.lineTo(x1, s * 0.6); c.stroke();
+      ellipse(c, s * 0.5, s * 0.78, s * 0.06, s * 0.03); paint(c, "#7A5634");
+    },
+    stove(c, s, r, same) {
+      OBJECTS.counter(c, s, r, same);
+      c.fillStyle = "#3A3330"; c.fillRect(s * 0.12, s * 0.1, s * 0.76, s * 0.45);
+      [[0.32, 0.22], [0.68, 0.22], [0.32, 0.44], [0.68, 0.44]].forEach(([x, y]) => { ellipse(c, s * x, s * y, s * 0.1, s * 0.06); ink(c, s * 0.03, "#E25636"); });
+    },
+    fridge(c, s) {
+      c.beginPath(); c.roundRect(s * 0.08, -s * 0.45, s * 0.84, s * 1.38, s * 0.08); paint(c, "#F4F6F8", s * 0.045);
+      c.beginPath(); c.moveTo(s * 0.08, s * 0.1); c.lineTo(s * 0.92, s * 0.1); ink(c, s * 0.035);
+      c.beginPath(); c.moveTo(s * 0.78, -s * 0.3); c.lineTo(s * 0.78, -s * 0.05); c.moveTo(s * 0.78, s * 0.2); c.lineTo(s * 0.78, s * 0.55); ink(c, s * 0.05, "#9AA4AE");
+      ellipse(c, s * 0.3, -s * 0.2, s * 0.06, s * 0.06); paint(c, "#F28DA8");
+    },
+    chair(c, s) {
+      c.beginPath(); c.roundRect(s * 0.25, s * 0.15, s * 0.5, s * 0.18, s * 0.05); paint(c, "#A4774A", s * 0.035);
+      c.beginPath(); c.roundRect(s * 0.22, s * 0.32, s * 0.56, s * 0.4, s * 0.06); paint(c, "#C99A6B", s * 0.035);
+      c.fillStyle = "#7A5634"; c.fillRect(s * 0.26, s * 0.72, s * 0.06, s * 0.2); c.fillRect(s * 0.68, s * 0.72, s * 0.06, s * 0.2);
+    },
+    sofa(c, s, r, same) {
+      const x0 = same(-1, 0) ? -1 : s * 0.04, x1 = same(1, 0) ? s + 1 : s * 0.96;
+      c.fillStyle = "#5E7FBF"; c.fillRect(x0, s * 0.05, x1 - x0, s * 0.4);
+      c.fillStyle = "#7C9BD6"; c.fillRect(x0, s * 0.42, x1 - x0, s * 0.45);
+      c.strokeStyle = C.ink; c.lineWidth = s * 0.04; c.strokeRect(x0, s * 0.05, x1 - x0, s * 0.82);
+      if (!same(-1, 0)) { c.beginPath(); c.roundRect(x0 - s * 0.02, s * 0.2, s * 0.16, s * 0.7, s * 0.06); paint(c, "#5E7FBF", s * 0.04); }
+      if (!same(1, 0)) { c.beginPath(); c.roundRect(x1 - s * 0.14, s * 0.2, s * 0.16, s * 0.7, s * 0.06); paint(c, "#5E7FBF", s * 0.04); }
+    },
+    tv(c, s) {
+      c.fillStyle = "#7A5634"; c.fillRect(s * 0.1, s * 0.55, s * 0.8, s * 0.35);
+      c.beginPath(); c.roundRect(s * 0.06, -s * 0.15, s * 0.88, s * 0.66, s * 0.04); paint(c, "#26262B", s * 0.04);
+      const g = c.createLinearGradient(0, -s * 0.1, 0, s * 0.45); g.addColorStop(0, "#5EC2E8"); g.addColorStop(1, "#7C5CD6");
+      c.fillStyle = g; c.fillRect(s * 0.13, -s * 0.08, s * 0.74, s * 0.52);
+    },
+    shelf(c, s) {
+      c.beginPath(); c.roundRect(s * 0.06, -s * 0.5, s * 0.88, s * 1.4, s * 0.04); paint(c, "#A4774A", s * 0.045);
+      const cols = ["#D9433B", "#4F86B0", "#F2B544", "#62A24C", "#7C5CD6"];
+      for (let row = 0; row < 3; row++) {
+        const y = -s * 0.42 + row * s * 0.44;
+        c.fillStyle = "#7A5634"; c.fillRect(s * 0.1, y + s * 0.36, s * 0.8, s * 0.04);
+        for (let i = 0; i < 5; i++) { c.fillStyle = cols[(i + row) % 5]; c.fillRect(s * (0.14 + i * 0.15), y + s * (0.08 + (i % 2) * 0.04), s * 0.11, s * (0.28 - (i % 2) * 0.04)); }
+      }
     },
     bed(c, s, r) {
       blob(c, rectPts(s * 0.08, s * 0.02, s * 0.84, s * 0.94), r, s * 0.03); paint(c, "#8DB8E0", s * 0.04);
@@ -513,8 +581,9 @@
     hero: { shirt: "#F3F1EA", pants: "#2F7A4F", skin: "#6E4128", hair: "#1C1310", braids: true, shorts: true, print: "#9A9A96" },
     friend: { shirt: "#7CC47F", pants: "#6B5B95", skin: "#C98E63", hair: "#2B1D14", bow: "#F28DA8" },
     brother: { shirt: "#F3F1EA", pants: "#3D4F7A", skin: "#7A4A2E", hair: "#1C1310", braids: true, shorts: true },
-    mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#E8B48A", hair: "#7A4B2A", long: true },
-    elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#F0C8A8", hair: "#E8E4DC", glasses: true },
+    mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#7A4A2E", hair: "#1C1310", long: true },
+    dad: { shirt: "#3E6E9E", pants: "#4A4A55", skin: "#6E4128", hair: "#1C1310", beard: true },
+    elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#7A4A2E", hair: "#E8E4DC", glasses: true },
     uncle: { shirt: "#4F86B0", pants: "#6B5B4B", skin: "#E0AC85", hair: "#8B5A2B", hat: "#C9B27C", beard: true },
   };
 
@@ -544,6 +613,7 @@
     const sheet = A.assets.people[look];
     const im = sheet && img(sheet.src);
     if (im) return personSheet(c, sheet, im, dir, cx, foot, s, phase);
+    if (look === "squirrel") return squirrel(c, dir, cx, foot, s, t);
 
     const L = LOOKS[look] || LOOKS.friend;
     const u = s / 16;
@@ -639,6 +709,67 @@
       c.beginPath(); c.ellipse(cx, hy - 2.6 * u, 3.8 * u, 3 * u, 0, Math.PI, Math.PI * 2); c.closePath(); paint(c, L.hat, lw);
     }
     c.restore();
+  }
+
+  /** A squirrel with a big bushy tail, holding an acorn. */
+  function squirrel(c, dir, cx, foot, s, t) {
+    const u = s / 16, lw = Math.max(1.3, u * 0.6);
+    const k = dir === "left" ? -1 : 1;              // which way it's looking
+    const flick = Math.max(0, Math.sin(t * 2.3)) ** 6 * 0.35;
+    ellipse(c, cx, foot, 4 * u, 1.3 * u); paint(c, "rgba(0,0,0,.16)");
+    // tail: a big curl behind
+    c.save(); c.translate(cx - k * 2.5 * u, foot - 3 * u); c.rotate(-k * flick);
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.bezierCurveTo(-k * 6 * u, -1 * u, -k * 6 * u, -10 * u, -k * 1 * u, -11 * u);
+    c.bezierCurveTo(k * 2 * u, -11.5 * u, k * 1.5 * u, -8 * u, -k * 1 * u, -8 * u);
+    c.bezierCurveTo(-k * 3 * u, -6 * u, -k * 2 * u, -2 * u, k * 1 * u, -1 * u);
+    c.closePath(); paint(c, "#B8743F", lw);
+    c.beginPath(); c.moveTo(-k * 1 * u, -2 * u); c.quadraticCurveTo(-k * 4.5 * u, -6 * u, -k * 1 * u, -9.5 * u); ink(c, lw, "#D9A06B");
+    c.restore();
+    // body, belly and paws holding an acorn
+    ellipse(c, cx, foot - 3.5 * u, 3.2 * u, 3.6 * u); paint(c, "#A9663A", lw);
+    ellipse(c, cx + k * 0.6 * u, foot - 3 * u, 1.8 * u, 2.4 * u); paint(c, "#F2D9B8");
+    ellipse(c, cx + k * 1.4 * u, foot - 4.2 * u, 1.2 * u, 1.4 * u); paint(c, "#B07A45", lw * 0.7);
+    c.beginPath(); c.arc(cx + k * 1.4 * u, foot - 5 * u, 1.2 * u, Math.PI, Math.PI * 2); paint(c, "#6E4A2A", lw * 0.6);
+    // head and ears
+    const hy = foot - 8 * u;
+    [-1, 1].forEach((e) => { c.beginPath(); c.moveTo(cx + e * 1.2 * u, hy - 1.8 * u); c.lineTo(cx + e * 1.9 * u, hy - 3.6 * u); c.lineTo(cx + e * 2.4 * u, hy - 1.2 * u); c.closePath(); paint(c, "#A9663A", lw); });
+    ellipse(c, cx, hy, 2.7 * u, 2.4 * u); paint(c, "#A9663A", lw);
+    ellipse(c, cx + k * 1.6 * u, hy + 0.6 * u, 1.3 * u, 0.9 * u); paint(c, "#F2D9B8");
+    const blink = Math.floor((t + cx * 0.01) * 10) % 41 === 0;
+    [-0.6, 1].forEach((e) => {
+      const ex = cx + k * e * u;
+      if (blink) { c.beginPath(); c.moveTo(ex - 0.5 * u, hy - 0.2 * u); c.lineTo(ex + 0.5 * u, hy - 0.2 * u); ink(c, lw * 0.8); }
+      else { ellipse(c, ex, hy - 0.2 * u, 0.55 * u, 0.7 * u); paint(c, C.ink); }
+    });
+    ellipse(c, cx + k * 2.5 * u, hy + 0.3 * u, 0.5 * u, 0.4 * u); paint(c, C.ink);
+  }
+
+  /** Something to collect on a quest, glinting in the grass. (cx, cy) is its middle. */
+  function pickup(c, kind, cx, cy, s, t) {
+    const pic = A.assets.objects[kind];
+    const im = pic && img(pic.src);
+    const bob = Math.sin(t * 3 + cx * 0.05) * s * 0.03;
+    const lw = Math.max(1.3, s * 0.035);
+    ellipse(c, cx, cy + s * 0.2, s * 0.16, s * 0.05); paint(c, "rgba(0,0,0,.18)");
+    if (im) { const w = s * (pic.w || 0.4), hh = s * (pic.h || 0.4); c.drawImage(im, cx - w / 2, cy - hh / 2 + bob, w, hh); }
+    else if (kind === "acorn") {
+      ellipse(c, cx, cy + s * 0.04 + bob, s * 0.13, s * 0.16); paint(c, "#C98B4B", lw);
+      c.beginPath(); c.arc(cx, cy - s * 0.04 + bob, s * 0.15, Math.PI * 1.02, Math.PI * 1.98); c.closePath(); paint(c, "#7A5634", lw);
+      c.beginPath(); c.moveTo(cx, cy - s * 0.18 + bob); c.lineTo(cx + s * 0.04, cy - s * 0.25 + bob); ink(c, lw, "#5A3D22");
+    } else {
+      ellipse(c, cx, cy + bob, s * 0.17, s * 0.11, -0.3); paint(c, "#B5733D", lw);
+      c.beginPath(); c.moveTo(cx - s * 0.12, cy + s * 0.04 + bob); c.quadraticCurveTo(cx, cy - s * 0.04 + bob, cx + s * 0.12, cy - s * 0.06 + bob); ink(c, lw * 0.8, "#7A4A22");
+    }
+    // a twinkle so it's easy to spot
+    const tw = (Math.sin(t * 4 + cx * 0.1) + 1) / 2;
+    if (tw > 0.5) {
+      const r = s * 0.1 * tw, x = cx + s * 0.16, y = cy - s * 0.2 + bob;
+      c.fillStyle = `rgba(255,250,210,${tw})`;
+      c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * 0.3, y - r * 0.3); c.lineTo(x + r, y); c.lineTo(x + r * 0.3, y + r * 0.3);
+      c.lineTo(x, y + r); c.lineTo(x - r * 0.3, y + r * 0.3); c.lineTo(x - r, y); c.lineTo(x - r * 0.3, y - r * 0.3); c.closePath(); c.fill();
+    }
   }
 
   /** Cornrow braids running back over the head, gathered into a little puff. */
@@ -1033,5 +1164,5 @@
     return cv;
   }
 
-  A.draw = { C, ground, object, person, critter, silhouette, water, boat, wagon, blob, rectPts, ellipsePts, rng, paint, line };
+  A.draw = { C, ground, object, person, critter, silhouette, water, boat, wagon, pickup, blob, rectPts, ellipsePts, rng, paint, line };
 })();
