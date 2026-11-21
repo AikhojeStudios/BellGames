@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Turn an OpenStreetMap export (map.osm) into a Going on an Adventure map.
+Turn an OpenStreetMap export (map.osm) into a Garter Quest map.
 
   python3 tools/osm_to_map.py map.osm > js/games/adventure/crescent-map.js
 

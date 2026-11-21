@@ -1,5 +1,5 @@
 /* =====================================================================
-   Going on an Adventure — world data
+   Garter Quest — world data
    Maps are drawn with one character per tile (see TILES for the key).
    To add an area: add a map, then connect it with "warps" (a tile you
    step on that takes you somewhere else). People, signs and which
@@ -79,7 +79,7 @@
       warps: [{ x: 3, y: 7, to: "crescent", tx: 0, ty: 0, dir: "down" }], // set by buildCrescent
       people: [
         { x: 5, y: 3, look: "mom", dir: "down", talk: [
-          "MOM: Going on an adventure? How exciting!",
+          "MOM: Off on a Garter Quest? How exciting!",
           "Critters hide in the tall grass in everyone's yards on Crescent Drive. Answer their questions to make friends.",
           "Your bike is right outside by the driveway. Gram lives just across the street. Be home for dinner!",
         ] },

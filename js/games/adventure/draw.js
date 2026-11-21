@@ -1,5 +1,5 @@
 /* =====================================================================
-   Going on an Adventure — drawing
+   Garter Quest — drawing
    Two sources of pictures:
      1. Your hand-drawn PNGs, listed in A.assets below. When a file is
         listed and loads, it is used.

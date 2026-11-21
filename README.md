@@ -10,7 +10,7 @@ Money, counting and number games for young kids. Plain HTML, CSS and JavaScript 
 | **Number Path** | Filling in missing numbers, counting by 1, 2, 5 and 10 |
 | **Feed the Snake** | Matching numbers, before/after, bigger/smaller, simple sums |
 | **Snake Chase** | Steering a snake to eat numbers that fit a rule (even, odd, bigger than…) |
-| **Going on an Adventure** | Exploring a little world and making critter friends by answering adding and taking-away questions |
+| **Garter Quest** | Exploring a little world and making critter friends by answering adding and taking-away questions |
 
 Each game has Easy, Medium and Hard levels. Stars and the sound setting are saved in the browser.
 
@@ -40,7 +40,7 @@ assets/coins/       coin pictures
 - Snake Chase: arrow keys or WASD, swipe, tap the board, or use the on-screen arrows. Press Space to pause.
 - Esc goes back to the level picker.
 
-## Going on an Adventure
+## Garter Quest
 
 Home base is Crescent Drive: Our House and Gram's House face each other across the street, and Forbes Bay is to the east. Walk around the neighborhood, ride your bike, swim in the bay and the creek (sea critters live there), go fishing with Uncle Pat at the dock once you answer his math question, talk to people, read signs, and meet critters in the tall grass (every yard is tall grass). Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (the ☰ button). Progress is saved in the browser.
 

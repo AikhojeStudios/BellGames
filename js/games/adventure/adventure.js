@@ -1,5 +1,5 @@
 /* =====================================================================
-   Going on an Adventure — engine
+   Garter Quest — engine
    Walk around the neighborhood, talk to people, read signs, and meet
    critters in the tall grass. Critters become friends when you answer
    their math questions.
@@ -75,7 +75,7 @@
   /* ================================================================== */
   const Adventure = {
     id: "adventure",
-    title: "Going on an Adventure",
+    title: "Garter Quest",
     tagline: "Explore the neighborhood & make critter friends",
     accent: "olive",
     wide: true, // gets a full-width tile on the home screen
@@ -192,7 +192,7 @@
       this.updateProgress();
       if (!save) {
         this.say([
-          "Welcome to GOING ON AN ADVENTURE!",
+          "Welcome to GARTER QUEST!",
           "Drag the joystick to walk. Press A to talk to people and read signs.",
           "Go outside and look for critters in the tall grass!",
         ]);
