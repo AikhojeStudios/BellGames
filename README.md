@@ -57,6 +57,8 @@ Save drawings as PNG with a transparent background in `assets/adventure/`, then 
 - **Ground tiles**: square pictures by map letter. Give a list to vary them so the ground doesn't look repeated.
 - **Objects** (trees, signs, furniture): by map letter, with a size in tiles. The bottom of the picture sits on its tile.
 
+**Boat:** Uncle Pat's rowboat is tied up at the end of the dock. Face it and press A to climb in, steer around the water, then face the dock or shore and press B to step out; it stays where you leave it. **Sea routes:** a warp with `byBoat: true` only works when you sail onto it, and your boat comes along to the new map, so new places can be reached by water (there's an example in `world.js`).
+
 Controls: drag the joystick to walk, A to talk and choose, B to go back, ☰ for the menu. On a keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M opens the menu.
 
 ### The Crescent Drive map

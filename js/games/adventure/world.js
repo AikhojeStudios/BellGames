@@ -138,7 +138,7 @@
     for (const [name, [x, y]] of Object.entries(G.signs)) {
       signs.push({ x, y, text: [name.toUpperCase()].concat(extra[name] ? [extra[name]] : []) });
     }
-    if (sp.dock.sign) signs.push({ x: sp.dock.sign[0], y: sp.dock.sign[1], text: ["FORBES BAY DOCK", "Uncle Pat's boat is tied up at the end."] });
+    if (sp.dock.sign) signs.push({ x: sp.dock.sign[0], y: sp.dock.sign[1], text: ["FORBES BAY DOCK", "Uncle Pat's boat is tied up at the end. Take it for a ride!"] });
     MAPS.home.warps[0].tx = sp.ours.land[0]; MAPS.home.warps[0].ty = sp.ours.land[1];
     MAPS.grams.warps[0].tx = sp.grams.land[0]; MAPS.grams.warps[0].ty = sp.grams.land[1];
     const ox = sp.ours.door[0];
@@ -146,7 +146,8 @@
       name: "Crescent Drive",
       border: "T",
       layout: "osm-2", // change when the map is regenerated, so old saved spots reset
-      tiles: G.tiles,
+      // the boat starts tied up at the dock; it's an item you can ride, so its tile is water
+      tiles: G.tiles.map((row) => row.replace(/O/g, "~")),
       warps: [
         { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 3, ty: 6, dir: "up" },
         { x: sp.grams.door[0], y: sp.grams.door[1], to: "grams", tx: 4, ty: 6, dir: "up" },
@@ -160,12 +161,19 @@
           "Snakes like the tall grass near the creek. Some are really shy!",
         ] },
         { x: sp.dock.pat[0], y: sp.dock.pat[1], look: "uncle", dir: "down", action: "fishing", talk: [
-          "UNCLE PAT: Ahoy there, kiddo! Want to go fishing?",
+          "UNCLE PAT: Ahoy there, kiddo! You can take my boat out anytime. Just face it and press A.",
+          "Want to go fishing?",
           "First you have to answer my math question!",
         ] },
       ],
       // things you can pick up
-      items: sp.bike ? [{ x: sp.bike[0], y: sp.bike[1], kind: "bike" }] : [],
+      items: [
+        ...(sp.bike ? [{ x: sp.bike[0], y: sp.bike[1], kind: "bike" }] : []),
+        { x: sp.dock.boat[0], y: sp.dock.boat[1], kind: "boat", dir: "right" },
+      ],
+      // Sea routes to other places go here: a warp with byBoat: true only works
+      // when you sail onto it, and your boat comes along. For example:
+      // { x: 139, y: 10, to: "island", tx: 1, ty: 5, dir: "right", byBoat: true },
       // more copies of a name = met more often
       critters: [
         "squeaks", "squeaks", "squeaks",

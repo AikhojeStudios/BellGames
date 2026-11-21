@@ -18,6 +18,7 @@
   const STEP = 14;            // frames to walk one tile
   const BIKE_STEP = 8;        // frames to ride one tile
   const SWIM_STEP = 20;       // frames to swim one tile
+  const BOAT_STEP = 10;       // frames to row one tile
   const BITE_WINDOW = { easy: 80, medium: 60, hard: 45 }; // frames to react when a fish bites
   const NPC_STEP = 22;        // people stroll a bit slower
   const LINE = 30;            // characters per line of talking
@@ -183,6 +184,9 @@
       const fresh = (m) => !MAPS[m]?.layout || save?.layouts?.[m] === MAPS[m].layout;
       const at = save && MAPS[save.map] && fresh(save.map) ? save : START;
       if (this.bike && !fresh(this.bike.map)) this.bike = this.bikeHome();
+      // the boat: parked somewhere, or you're in it
+      this.boating = !!save?.boating && fresh(save?.map);
+      this.boat = this.boating ? null : save?.boat && MAPS[save.boat.map] && fresh(save.boat.map) ? save.boat : this.boatHome();
       this.loadMap(at.map, at.x, at.y, at.dir);
       if (this.tileAt(at.x, at.y).solid) this.loadMap(START.map, START.x, START.y, START.dir);
       this.scene = "world";
@@ -214,6 +218,8 @@
       App.Store.set("adventure", {
         map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir,
         friends: [...this.friends], seen: [...this.seen], hasBike: this.hasBike,
+        boating: !!this.boating,
+        boat: this.boat || { map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir },
         // while riding, the bike is wherever you are
         bike: this.bike || { map: this.mapId, x: this.player.x, y: this.player.y },
         layouts: Object.fromEntries(Object.entries(MAPS).filter(([, m]) => m.layout).map(([id, m]) => [id, m.layout])),
@@ -221,6 +227,15 @@
     },
 
     /** The bike's starting spot: the first map that lists one in its items. */
+    /** The boat's starting spot: the first map that lists one in its items. */
+    boatHome() {
+      for (const [id, m] of Object.entries(MAPS)) {
+        const it = (m.items || []).find((i) => i.kind === "boat");
+        if (it) return { map: id, x: it.x, y: it.y, dir: it.dir || "right" };
+      }
+      return null;
+    },
+
     bikeHome() {
       for (const [id, m] of Object.entries(MAPS)) {
         const it = (m.items || []).find((i) => i.kind === "bike");
@@ -254,7 +269,9 @@
       this.people = (this.map.people || []).map((p) => ({
         ...p, home: { x: p.x, y: p.y }, fromX: p.x, fromY: p.y, moving: false, t: 0, wait: randInt(60, 200),
       }));
-      this.items = (this.map.items || []).filter((it) => it.kind !== "bike");
+      this.items = (this.map.items || []).filter((it) => it.kind !== "bike" && it.kind !== "boat");
+      if (this.boat && this.boat.map === id) this.items.push({ kind: "boat", x: this.boat.x, y: this.boat.y, dir: this.boat.dir });
+      if (this.boating && !this.tileAt(x, y).swim) this.boating = false;
       if (this.bike && this.bike.map === id) this.items.push({ kind: "bike", x: this.bike.x, y: this.bike.y });
       this.grace = 2;
       this.fx = [];
@@ -284,7 +301,7 @@
     tileAt(x, y) { return TILES[this.charAt(x, y)] || TILES[this.map.border]; },
     personAt(x, y) { return this.people.find((p) => p.x === x && p.y === y); },
     itemAt(x, y) { return this.items.find((it) => it.x === x && it.y === y); },
-    stepTime(x, y) { return this.riding ? BIKE_STEP : this.tileAt(x, y).swim ? SWIM_STEP : STEP; },
+    stepTime(x, y) { return this.boating ? BOAT_STEP : this.riding ? BIKE_STEP : this.tileAt(x, y).swim ? SWIM_STEP : STEP; },
 
     blocked(x, y, who) {
       if (y < 0 || y >= this.map.tiles.length || x < 0 || x >= this.map.tiles[0].length) return true;
@@ -343,7 +360,7 @@
       if (p.bumpWait > 0) p.bumpWait--;
       if (Input.take("start")) return this.openStartMenu();
       if (Input.take("a")) return this.interact();
-      if (Input.take("b")) return this.bikeButton();
+      if (Input.take("b")) return this.boating ? this.leaveBoat() : this.bikeButton();
 
       const d = Input.dir();
       if (!d) { p.chain = false; p.turn = 0; return; }
@@ -353,7 +370,18 @@
       }
       if (p.turn > 0) { p.turn--; return; }
       const nx = p.x + DIRS[d][0], ny = p.y + DIRS[d][1];
-      if (this.riding && this.tileAt(nx, ny).swim) {
+      if (this.boating) {
+        const inMap = ny >= 0 && ny < this.map.tiles.length && nx >= 0 && nx < this.map.tiles[0].length;
+        if (!inMap || !this.tileAt(nx, ny).swim || this.blocked(nx, ny, p)) {
+          p.chain = false;
+          if (!p.bumpWait) {
+            sfx.bump(); p.bumpWait = 30;
+            if (!inMap) this.say(["The water goes on and on... New places to sail to are coming soon!"]);
+            else if (!this.tileAt(nx, ny).swim) this.say(["Land ho! Face the dock or the shore and press B to step out."]);
+          }
+          return;
+        }
+      } else if (this.riding && this.tileAt(nx, ny).swim) {
         p.chain = false;
         if (!p.bumpWait) { sfx.bump(); p.bumpWait = 18; this.say(["Bikes can't swim! Press B to hop off first."]); }
         return;
@@ -366,7 +394,45 @@
       p.fromX = p.x; p.fromY = p.y;
       p.x = nx; p.y = ny;
       p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime(nx, ny);
-      p.ease = this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim;
+      p.ease = !this.boating && (this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim);
+    },
+
+    /* ---------------- the boat ---------------- */
+    boardBoat(boat) {
+      if (this.riding) return this.say(["Hop off your bike first! Press B."]);
+      const p = this.player;
+      this.items = this.items.filter((it) => it !== boat);
+      this.boat = null;
+      this.boating = true;
+      // step into the boat
+      p.fromX = p.x; p.fromY = p.y; p.x = boat.x; p.y = boat.y;
+      p.moving = true; p.t = 0; p.dur = 12; p.ease = false; p.chain = false;
+      this.splash(boat.x + 0.5, boat.y + 0.6, 6, 0.5);
+      tone(330, 0.1, "triangle", 0.1); tone(495, 0.12, "triangle", 0.1, 0.08);
+      this.save();
+      if (!this.sailedBefore) {
+        this.sailedBefore = true;
+        this.say(["You climbed into the boat!", "Steer around the water. To get out, face the dock or the shore and press B."]);
+      }
+    },
+
+    leaveBoat() {
+      const p = this.player;
+      const [dx, dy] = DIRS[p.dir];
+      const tx = p.x + dx, ty = p.y + dy;
+      const t = this.tileAt(tx, ty);
+      const inMap = ty >= 0 && ty < this.map.tiles.length && tx >= 0 && tx < this.map.tiles[0].length;
+      if (!inMap || t.swim || t.solid || this.blocked(tx, ty, p)) {
+        return this.say(["Steer next to the dock or the shore, face it, and press B to step out."]);
+      }
+      this.boating = false;
+      this.boat = { map: this.mapId, x: p.x, y: p.y, dir: p.dir };
+      this.items.push({ kind: "boat", x: p.x, y: p.y, dir: p.dir });
+      p.fromX = p.x; p.fromY = p.y; p.x = tx; p.y = ty;
+      p.moving = true; p.t = 0; p.dur = 12; p.ease = false; p.chain = false;
+      this.justLeftBoat = true;
+      tone(440, 0.08, "triangle", 0.1);
+      this.save();
     },
 
     /** B: get off if riding, or get on if the bike is right here. */
@@ -410,7 +476,8 @@
     /** Called when the player finishes a step. Returns true if a door or critter took over. */
     arrive() {
       const p = this.player;
-      const warp = (this.map.warps || []).find((w) => w.x === p.x && w.y === p.y);
+      // doors are for walking; warps marked byBoat are sea routes to other places
+      const warp = (this.map.warps || []).find((w) => w.x === p.x && w.y === p.y && !!w.byBoat === !!this.boating);
       if (warp) {
         if (this.riding && MAPS[warp.to].indoors) this.getOff(p.fromX, p.fromY);
         sfx.door();
@@ -419,9 +486,11 @@
       }
       const here = this.tileAt(p.x, p.y);
       const wasSwimming = this.tileAt(p.fromX, p.fromY).swim;
-      if (here.swim && !wasSwimming) { this.splash(p.x + 0.5, p.y + 0.56, 14, 1); tone(240, 0.18, "sine", 0.12); tone(520, 0.12, "sine", 0.06, 0.05); }
-      else if (!here.swim && wasSwimming) this.splash(p.x + 0.5, p.y + 0.5, 5, 0.4);
-      const pool = here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
+      if (this.boating) { /* boats don't splash like swimmers */ }
+      else if (here.swim && !wasSwimming) { this.splash(p.x + 0.5, p.y + 0.56, 14, 1); tone(240, 0.18, "sine", 0.12); tone(520, 0.12, "sine", 0.06, 0.05); }
+      else if (!here.swim && wasSwimming && !this.justLeftBoat) this.splash(p.x + 0.5, p.y + 0.5, 5, 0.4);
+      this.justLeftBoat = false;
+      const pool = this.boating ? null : here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
       if (pool) {
         if (this.grace > 0) this.grace--;
         else if (Math.random() < ENCOUNTER_RATE) { this.startBattle(pick(pool), here.swim); return true; }
@@ -457,6 +526,7 @@
       }
       const item = this.itemAt(fx, fy);
       if (item && item.kind === "bike") return this.getOn(item);
+      if (item && item.kind === "boat") return this.boardBoat(item);
       const sign = (this.map.signs || []).find((s) => s.x === fx && s.y === fy);
       if (sign) this.say(sign.text);
     },
@@ -479,7 +549,15 @@
       const p = this.player;
       if (this.scene === "world" && this.tileAt(Math.round(this.swimX ?? p.x), Math.round(this.swimY ?? p.y)).swim && this.swimX != null) {
         // a swimmer pushes water: a wake while moving, slow rings while floating
-        if (p.moving && p.ease) {
+        if (p.moving && this.boating) {
+          const [dx, dy] = DIRS[p.dir];
+          if (this.tick % 4 === 0) {
+            for (const k of [-1, 1]) {
+              this.fx.push({ kind: "wake", x: this.swimX - dx * 0.55, y: this.swimY - dy * 0.35 + 0.05, vx: -dy * k * 0.03 - dx * 0.01, vy: dx * k * 0.02 - dy * 0.01, life: 55, age: 0 });
+            }
+          }
+          if (this.tick % 12 === 0) this.ring(this.swimX - dx * 0.6, this.swimY - dy * 0.4, 0.5, 40);
+        } else if (p.moving && p.ease) {
           const [dx, dy] = DIRS[p.dir];
           if (this.tick % 7 === 0) {
             for (const k of [-1, 1]) {
@@ -932,11 +1010,14 @@
         ...actors.map((a) => ({ y: a.at.y + 0.95, tx: Math.round(a.at.x), ty: Math.round(a.at.y), actor: true,
           cx: a.at.x * T + T / 2 - camX, base: a.at.y * T + T * 0.9 - camY, draw: (cc) => this.drawActor(a, camX, camY, t, cc) })),
         ...this.items.map((it) => ({ y: it.y + 0.9, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.92 - camY,
-          draw: (cc) => D.object(cc, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0) })),
+          draw: (cc) => it.kind === "boat"
+            ? D.boat(cc, it.x * T + T / 2 - camX, it.y * T + T * 0.62 - camY, T, it.dir || "right", t, false)
+            : D.object(cc, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0) })),
       ].sort((a, b) => a.y - b.y);
 
       const swimmer = this.tileAt(Math.round(pp.x), Math.round(pp.y)).swim;
       this.swimX = swimmer && !this.riding ? pp.x + 0.5 : null;
+      if (this.boating) this.swimY = pp.y + 0.62;
       this.swimY = pp.y + 0.56;
 
       if (wet.length) {
@@ -978,6 +1059,15 @@
       const foot = at.y * T + T * 0.9 - camY;
       const phase = e.moving ? (e.t / dur) * 0.5 + (e.leg ? 0.5 : 0) : null;
       const gx0 = Math.round(at.x), gy0 = Math.round(at.y);
+      if (e === this.player && this.boating) {
+        // sitting in the boat: draw the boat, then you, hidden below the sides
+        const by = at.y * T + T * 0.62 - camY + Math.sin(t * 2.2) * T * 0.03;
+        D.boat(c, cx, by, T, e.dir, t, true);
+        c.save(); c.beginPath(); c.rect(cx - T * 2, by - T * 3, T * 4, T * 3 - T * 0.02); c.clip();
+        D.person(c, "hero", e.dir, cx, by + T * 0.3, T, null, t);
+        c.restore();
+        return;
+      }
       if (this.tileAt(gx0, gy0).swim && look !== "heroBike") {
         // swimming: only head and shoulders above the water
         const waterY = foot - T * 0.3;

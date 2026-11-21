@@ -886,6 +886,49 @@
     }
   }
 
+  /**
+   * The rowboat, centred at (cx, cy) on the water, pointing the way it's facing.
+   * Side views show the whole hull; up and down show it end-on (shorter, wider).
+   */
+  function boat(c, cx, cy, s, dir, t, occupied) {
+    const pic = A.assets.objects.boat;
+    const im = pic && img(pic.src);
+    const lw = Math.max(1.5, s * 0.045);
+    c.save();
+    c.translate(cx, cy);
+    // a soft shadow ring on the water
+    c.fillStyle = "rgba(20,70,90,.22)";
+    c.beginPath(); c.ellipse(0, s * 0.18, s * 0.95, s * 0.32, 0, 0, Math.PI * 2); c.fill();
+    if (dir === "up" || dir === "down") c.rotate(dir === "up" ? -Math.PI / 2 : Math.PI / 2);
+    else if (dir === "left") c.scale(-1, 1);
+    if (dir === "up" || dir === "down") c.scale(0.8, 1.1);
+    if (im) {
+      const w = (pic.w || 2) * s, hh = (pic.h || 1) * s;
+      c.drawImage(im, -w / 2, -hh / 2, w, hh);
+      c.restore();
+      return;
+    }
+    const r = rng(5);
+    const hull = [[-0.85, -0.28], [0.4, -0.3], [0.88, 0], [0.4, 0.3], [-0.85, 0.28], [-0.92, 0]].map(([x, y]) => [x * s, y * s]);
+    blob(c, hull, r, s * 0.015); paint(c, "#F4EFE4", lw);
+    const inner = [[-0.75, -0.19], [0.36, -0.21], [0.7, 0], [0.36, 0.21], [-0.75, 0.19]].map(([x, y]) => [x * s, y * s]);
+    blob(c, inner, r, s * 0.015); paint(c, "#C99A6B", lw * 0.7);
+    if (!occupied) {
+      line(c, -0.35 * s, -0.2 * s, -0.35 * s, 0.2 * s, r, s * 0.01, s * 0.06, "#A4774A");
+      line(c, 0.15 * s, -0.21 * s, 0.15 * s, 0.21 * s, r, s * 0.01, s * 0.06, "#A4774A");
+    } else {
+      // oars dipping in time
+      const sw = Math.sin(t * 4) * 0.25;
+      for (const k of [-1, 1]) {
+        c.beginPath(); c.moveTo(-0.1 * s, k * 0.22 * s); c.lineTo((-0.1 + sw) * s, k * 0.7 * s);
+        ink(c, s * 0.05, "#8A6A4A");
+        ellipse(c, (-0.1 + sw) * s, k * 0.72 * s, s * 0.09, s * 0.05, sw); paint(c, "#A4774A", lw * 0.6);
+      }
+    }
+    line(c, -0.86 * s, 0.24 * s, 0.4 * s, 0.27 * s, r, s * 0.01, s * 0.045, "#D9433B");
+    c.restore();
+  }
+
   /** A solid silhouette of a critter (for ones you've met but not befriended). */
   function silhouette(id, w, hh, color) {
     const cv = document.createElement("canvas");
@@ -898,5 +941,5 @@
     return cv;
   }
 
-  A.draw = { C, ground, object, person, critter, silhouette, water, blob, rectPts, ellipsePts, rng, paint, line };
+  A.draw = { C, ground, object, person, critter, silhouette, water, boat, blob, rectPts, ellipsePts, rng, paint, line };
 })();
