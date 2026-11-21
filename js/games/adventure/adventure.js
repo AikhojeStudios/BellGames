@@ -13,10 +13,12 @@
   const { h, pick, randInt } = App.util;
   const AD = App.Adventure;
   const D = AD.draw;
-  const { TILES, CRITTERS, MAPS, START, makeQuestion } = AD.world;
+  const { TILES, CRITTERS, MAPS, START, CATCHES, makeQuestion } = AD.world;
 
   const STEP = 14;            // frames to walk one tile
   const BIKE_STEP = 8;        // frames to ride one tile
+  const SWIM_STEP = 20;       // frames to swim one tile
+  const BITE_WINDOW = { easy: 80, medium: 60, hard: 45 }; // frames to react when a fish bites
   const NPC_STEP = 22;        // people stroll a bit slower
   const LINE = 30;            // characters per line of talking
   const LINES = 3;            // lines per page of talking
@@ -110,6 +112,10 @@
         this.talkText = h("p"), this.talkMore = h("span", { class: "more", "aria-hidden": "true", text: "▼" }));
       this.menuEl = h("div", { class: "advmenu", hidden: true });
       this.bookEl = h("div", { class: "advbook", hidden: true });
+      this.fishEl = h("div", { class: "advfish", hidden: true },
+        this.fishMsg = h("p", { role: "status", "aria-live": "polite" }),
+        this.fishBtn = h("button", { type: "button", class: "fishbtn", onclick: () => Input.press("a") }),
+        h("button", { type: "button", class: "mback", text: "Done fishing", onclick: () => Input.press("b") }));
 
       this.knob = h("span", { class: "knob" });
       this.stick = h("div", { class: "joystick", role: "group", "aria-label": "Joystick: drag to walk" }, this.knob);
@@ -120,7 +126,7 @@
         button("b", "B: back, or hop on and off your bike", "B"),
         button("a", "A: talk or choose", "A"),
         button("start", "Menu", "☰"),
-        this.talk, this.menuEl, this.bookEl);
+        this.fishEl, this.talk, this.menuEl, this.bookEl);
       ui.body.append(this.stage);
 
       // joystick: drag from the middle in any direction
@@ -271,7 +277,7 @@
     tileAt(x, y) { return TILES[this.charAt(x, y)] || TILES[this.map.border]; },
     personAt(x, y) { return this.people.find((p) => p.x === x && p.y === y); },
     itemAt(x, y) { return this.items.find((it) => it.x === x && it.y === y); },
-    stepTime() { return this.riding ? BIKE_STEP : STEP; },
+    stepTime(x, y) { return this.riding ? BIKE_STEP : this.tileAt(x, y).swim ? SWIM_STEP : STEP; },
 
     blocked(x, y, who) {
       if (y < 0 || y >= this.map.tiles.length || x < 0 || x >= this.map.tiles[0].length) return true;
@@ -307,6 +313,7 @@
       else if (this.scene === "world") this.updateWorld();
       else if (this.scene === "battle") this.updateBattle();
       else if (this.scene === "book") this.updateBook();
+      else if (this.scene === "fishing") this.updateFishing();
       if (this.scene === "world") this.updatePeople();
       Input.pressed.clear();
     },
@@ -338,6 +345,11 @@
       }
       if (p.turn > 0) { p.turn--; return; }
       const nx = p.x + DIRS[d][0], ny = p.y + DIRS[d][1];
+      if (this.riding && this.tileAt(nx, ny).swim) {
+        p.chain = false;
+        if (!p.bumpWait) { sfx.bump(); p.bumpWait = 18; this.say(["Bikes can't swim! Press B to hop off first."]); }
+        return;
+      }
       if (this.blocked(nx, ny, p)) {
         p.chain = false;
         if (!p.bumpWait) { sfx.bump(); p.bumpWait = 18; }
@@ -345,7 +357,7 @@
       }
       p.fromX = p.x; p.fromY = p.y;
       p.x = nx; p.y = ny;
-      p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime();
+      p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime(nx, ny);
     },
 
     /** B: get off if riding, or get on if the bike is right here. */
@@ -396,9 +408,11 @@
         this.transition(() => { this.loadMap(warp.to, warp.tx, warp.ty, warp.dir); this.save(); });
         return true;
       }
-      if (this.tileAt(p.x, p.y).grass && this.map.critters) {
+      const here = this.tileAt(p.x, p.y);
+      const pool = here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
+      if (pool) {
         if (this.grace > 0) this.grace--;
-        else if (Math.random() < ENCOUNTER_RATE) { this.startBattle(pick(this.map.critters)); return true; }
+        else if (Math.random() < ENCOUNTER_RATE) { this.startBattle(pick(pool), here.swim); return true; }
       }
       return false;
     },
@@ -413,7 +427,7 @@
         n.dir = d;
         const nx = n.x + DIRS[d][0], ny = n.y + DIRS[d][1];
         if (Math.abs(nx - n.home.x) > 3 || Math.abs(ny - n.home.y) > 3) continue;
-        if (this.blocked(nx, ny, n) || this.tileAt(nx, ny).grass) continue;
+        if (this.blocked(nx, ny, n) || this.tileAt(nx, ny).grass || this.tileAt(nx, ny).swim) continue;
         if ((this.map.warps || []).some((w) => w.x === nx && w.y === ny)) continue;
         n.fromX = n.x; n.fromY = n.y; n.x = nx; n.y = ny;
         n.moving = true; n.t = 0;
@@ -426,12 +440,114 @@
       const person = this.personAt(fx, fy);
       if (person) {
         if (!person.moving) person.dir = OPPOSITE[p.dir];
+        if (person.action === "fishing") return this.say(person.talk, () => this.fishingQuestion());
         return this.say(person.talk);
       }
       const item = this.itemAt(fx, fy);
       if (item && item.kind === "bike") return this.getOn(item);
       const sign = (this.map.signs || []).find((s) => s.x === fx && s.y === fy);
       if (sign) this.say(sign.text);
+    },
+
+    /* ---------------- fishing with Uncle Pat ---------------- */
+    fishingQuestion() {
+      const q = makeQuestion(this.mode);
+      const solved = q.text.replace("?", q.answer);
+      this.openMenu({
+        kind: "answers",
+        title: q.text,
+        items: q.choices.map(String),
+        cols: 2,
+        onPick: (i) => {
+          this.menu = null;
+          if (q.choices[i] === q.answer) {
+            sfx.right();
+            this.ui.award({ celebrate: false });
+            this.say([`UNCLE PAT: That's right! ${solved}`, "Grab a rod. Let's go fishing!"], () => this.startFishing());
+          } else {
+            App.Sound.miss();
+            this.say([`UNCLE PAT: Not quite. ${solved}`, "Talk to me again and I'll ask you another one!"]);
+          }
+        },
+        onBack: () => { this.menu = null; this.say(["UNCLE PAT: Come back anytime!"]); },
+      });
+    },
+
+    startFishing() {
+      this.transition(() => {
+        this.scene = "fishing";
+        this.fish = { phase: "ready", t: 0, target: 0.6, catch: null, caught: 0 };
+        this.fishSay("Press A to cast your line!", "Cast!");
+      });
+    },
+
+    fishSay(msg, button) {
+      this.fish.msg = msg;
+      this.fish.button = button;
+    },
+
+    updateFishing() {
+      const f = this.fish;
+      f.t++;
+      if (Input.take("b") || Input.take("start")) {
+        sfx.blip();
+        return this.transition(() => {
+          this.scene = "world";
+          this.fish = null;
+          if (f.caught) this.say([`UNCLE PAT: Nice fishing! You caught ${f.caught} today.`]);
+        });
+      }
+      const a = Input.take("a");
+      if (f.phase === "ready" && a) {
+        f.phase = "casting"; f.t = 0; f.target = 0.45 + Math.random() * 0.45;
+        tone(700, 0.25, "triangle", 0.08); tone(400, 0.2, "triangle", 0.06, 0.2);
+        this.fishSay("Swish!", "Casting...");
+      } else if (f.phase === "casting" && f.t >= 36) {
+        f.phase = "waiting"; f.t = 0; f.wait = randInt(100, 260);
+        tone(300, 0.1, "sine", 0.1);
+        this.fishSay("Wait for a bite... watch the bobber!", "Waiting...");
+      } else if (f.phase === "waiting") {
+        if (a) { f.wait += 40; this.fishSay("Too soon! Wait until the bobber dips under.", "Waiting..."); }
+        if (f.t >= f.wait) {
+          f.phase = "bite"; f.t = 0;
+          [880, 988].forEach((fr, i) => tone(fr, 0.08, "square", 0.08, i * 0.1));
+          this.fishSay("A bite! Press A now!", "Reel it in!");
+        }
+      } else if (f.phase === "bite") {
+        if (a) {
+          f.phase = "reeling"; f.t = 0; f.catch = pick(CATCHES);
+          this.fishSay("Reel, reel, reel!", "Reeling...");
+        } else if (f.t >= (BITE_WINDOW[this.mode] || 60)) {
+          f.phase = "ready"; f.t = 0;
+          App.Sound.miss();
+          this.fishSay("It got away! Press A to cast again.", "Cast again");
+        }
+      } else if (f.phase === "reeling" && f.t >= 50) {
+        f.phase = "caught"; f.t = 0;
+        this.landCatch(f.catch);
+      } else if (f.phase === "caught" && a) {
+        f.phase = "ready"; f.t = 0;
+        this.fishSay("Press A to cast your line!", "Cast!");
+      }
+    },
+
+    landCatch(id) {
+      const f = this.fish;
+      if (id === "boot") {
+        tone(220, 0.2, "triangle", 0.1); tone(180, 0.25, "triangle", 0.1, 0.18);
+        return this.fishSay("You caught... an old boot! Ha! Uncle Pat tosses it in the bin.", "Cast again");
+      }
+      const cr = CRITTERS[id];
+      const isNew = !this.friends.has(id);
+      f.caught++;
+      this.friends.add(id);
+      this.seen.add(id);
+      this.save();
+      this.updateProgress();
+      this.ui.award({ celebrate: false });
+      App.Sound.win();
+      if (isNew) App.FX.celebrate(true, "New friend!");
+      this.fishSay(`You caught ${cr.name}! You say hi and let it swim away.${isNew ? " It's in your Critter Book now!" : ""}`, "Cast again");
     },
 
     /* ---------------- talking ---------------- */
@@ -497,12 +613,12 @@
     },
 
     /* ---------------- meeting a critter ---------------- */
-    startBattle(id) {
+    startBattle(id, water = !!CRITTERS[id]?.water) {
       this.seen.add(id);
       sfx.meet();
       this.transition(() => {
         this.scene = "battle";
-        this.battle = { id, c: CRITTERS[id], hearts: 0, bored: 0, phase: "intro", slide: 0, hop: 0, shake: 0 };
+        this.battle = { id, c: CRITTERS[id], water, hearts: 0, bored: 0, phase: "intro", slide: 0, hop: 0, shake: 0 };
       }, { flash: true });
     },
 
@@ -604,6 +720,7 @@
       c.fillStyle = D.C.dark;
       c.fillRect(0, 0, this.W, this.H);
       if (this.scene === "battle") this.drawBattle();
+      else if (this.scene === "fishing") this.drawFishing();
       else this.drawWorld();
       if (this.fade) this.drawFade();
     },
@@ -664,6 +781,16 @@
       const cx = at.x * T + T / 2 - camX;
       const foot = at.y * T + T * 0.9 - camY;
       const phase = e.moving ? (e.t / dur) * 0.5 + (e.leg ? 0.5 : 0) : null;
+      const gx0 = Math.round(at.x), gy0 = Math.round(at.y);
+      if (this.tileAt(gx0, gy0).swim && look !== "heroBike") {
+        // swimming: only head and shoulders above the water
+        const waterY = foot - T * 0.34;
+        c.save(); c.beginPath(); c.rect(cx - T, waterY - T * 2, T * 2, T * 2); c.clip();
+        D.person(c, look, e.dir, cx, foot + T * 0.32 + Math.sin(t * 3) * T * 0.03, T, null, t);
+        c.restore();
+        this.ripples(cx, waterY, T, t + (phase || 0));
+        return;
+      }
       D.person(c, look, e.dir, cx, foot, T, phase, t);
       // tall grass hides your feet
       const gx = Math.round(at.x), gy = Math.round(at.y);
@@ -684,9 +811,12 @@
       sky.addColorStop(0, "#BFE6F7"); sky.addColorStop(1, "#E9F7FB");
       c.fillStyle = sky; c.fillRect(0, 0, W, H);
       const r = D.rng(42);
+      if (b.water) { this.drawWater(0.48, t); }
+      else {
       D.blob(c, [[-20, H * 0.5], [W * 0.3, H * 0.46], [W * 0.7, H * 0.52], [W + 20, H * 0.47], [W + 20, H + 20], [-20, H + 20]], r, 8);
       D.paint(c, D.C.tall, 2.5);
-      for (let i = 0; i < 18; i++) {
+      }
+      for (let i = 0; i < (b.water ? 0 : 18); i++) {
         const x = r() * W, y = H * (0.55 + r() * 0.4), k = 10 + r() * 8;
         c.beginPath(); c.moveTo(x - 4, y); c.quadraticCurveTo(x - 2, y - k / 2, x, y - k); c.moveTo(x + 4, y); c.quadraticCurveTo(x + 2, y - k / 2, x + 3, y - k * 0.8);
         c.strokeStyle = D.C.blade; c.lineWidth = 2; c.lineCap = "round"; c.stroke();
@@ -707,7 +837,121 @@
       const s = Math.min(W * 0.36, H * 0.24);
       c.fillStyle = "rgba(60,110,40,.25)";
       c.beginPath(); c.ellipse(W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s * 0.6, s * 0.12, 0, 0, Math.PI * 2); c.fill();
-      D.person(c, "hero", "up", W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s, null, t);
+      if (b.water) {
+        const hx = W * 0.28 - (1 - ease) * W * 0.7;
+        c.save(); c.beginPath(); c.rect(0, 0, W, H * 0.66 - s * 0.35); c.clip();
+        D.person(c, "hero", "up", hx, H * 0.66, s, null, t);
+        c.restore();
+        this.ripples(hx, H * 0.66 - s * 0.35, s, t);
+      } else D.person(c, "hero", "up", W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s, null, t);
+    },
+
+    ripples(cx, y, s, t) {
+      const c = this.ctx;
+      c.strokeStyle = "rgba(255,255,255,.8)"; c.lineWidth = Math.max(1.5, s * 0.04);
+      c.beginPath(); c.ellipse(cx, y, s * 0.42, s * 0.1, 0, 0, Math.PI * 2); c.stroke();
+      const k = (t * 0.8) % 1;
+      c.globalAlpha = 1 - k;
+      c.beginPath(); c.ellipse(cx, y, s * (0.45 + k * 0.4), s * (0.11 + k * 0.08), 0, 0, Math.PI * 2); c.stroke();
+      c.globalAlpha = 1;
+    },
+
+    /** Water from height fraction top down to the bottom, with little waves. */
+    drawWater(top, t) {
+      const c = this.ctx, W = this.W, H = this.H;
+      const g = c.createLinearGradient(0, H * top, 0, H);
+      g.addColorStop(0, "#8ACFE8"); g.addColorStop(1, "#3F8FB8");
+      c.fillStyle = g;
+      c.beginPath(); c.moveTo(0, H * top);
+      for (let x = 0; x <= W; x += 10) c.lineTo(x, H * top + Math.sin(x * 0.05 + t * 2) * 3);
+      c.lineTo(W, H); c.lineTo(0, H); c.closePath(); c.fill();
+      c.strokeStyle = D.C.ink; c.lineWidth = 2.5; c.stroke();
+      c.strokeStyle = "rgba(255,255,255,.55)"; c.lineWidth = 2;
+      for (let i = 0; i < 10; i++) {
+        const x = ((i * 97 + t * 18) % (W + 60)) - 30, y = H * (top + 0.06 + ((i * 37) % 50) / 100);
+        c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 10, y - 4, x + 20, y); c.stroke();
+      }
+    },
+
+    drawFishing() {
+      const c = this.ctx, W = this.W, H = this.H, f = this.fish;
+      const t = this.tick / 60;
+      const sea = 0.42;
+      const sky = c.createLinearGradient(0, 0, 0, H * sea);
+      sky.addColorStop(0, "#9FD8F2"); sky.addColorStop(1, "#E4F5FB");
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      // sun and far shore
+      c.fillStyle = "#FFD866"; c.beginPath(); c.arc(W * 0.82, H * 0.1, W * 0.07, 0, Math.PI * 2); c.fill();
+      const r = D.rng(7);
+      D.blob(c, [[-20, H * sea], [W * 0.15, H * (sea - 0.06)], [W * 0.4, H * (sea - 0.04)], [W * 0.7, H * (sea - 0.07)], [W + 20, H * (sea - 0.03)], [W + 20, H * sea + 4], [-20, H * sea + 4]], r, 6);
+      D.paint(c, "#7DB35A", 2.5);
+      this.drawWater(sea, t);
+      // fish shadows swimming below
+      for (let i = 0; i < 4; i++) {
+        const dir = i % 2 ? 1 : -1;
+        const x = (((i * 211 + dir * t * (14 + i * 5)) % (W + 80)) + W + 80) % (W + 80) - 40;
+        const y = H * (sea + 0.16 + i * 0.09);
+        c.fillStyle = "rgba(20,60,90,.28)";
+        c.beginPath(); c.ellipse(x, y, 16, 6, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.moveTo(x - dir * 14, y); c.lineTo(x - dir * 24, y - 6); c.lineTo(x - dir * 24, y + 6); c.closePath(); c.fill();
+      }
+      // the dock
+      const dockY = H * (sea + 0.1);
+      for (let x = 0.04; x < 0.34; x += 0.1) { c.fillStyle = "#7A5634"; c.fillRect(W * x, dockY, W * 0.03, H * 0.2); }
+      D.blob(c, D.rectPts(-10, dockY - H * 0.035, W * 0.36 + 10, H * 0.05, 4), r, 3); D.paint(c, "#C99A66", 2.5);
+      // you, with a rod
+      const s = Math.min(W * 0.3, H * 0.2);
+      const px = W * 0.2;
+      D.person(c, "hero", "right", px, dockY - H * 0.01, s, null, t);
+      const handX = px + s * 0.28, handY = dockY - s * 0.75;
+      const tipX = px + s * 1.25, tipY = dockY - s * 1.8;
+      c.strokeStyle = "#7A5634"; c.lineWidth = 4; c.lineCap = "round";
+      c.beginPath(); c.moveTo(handX, handY); c.quadraticCurveTo((handX + tipX) / 2, tipY + s * 0.3, tipX, tipY); c.stroke();
+      // the bobber
+      const restX = W * (0.4 + f.target * 0.5), restY = H * sea + 6;
+      let bx = tipX, by = tipY + 30, under = false;
+      if (f.phase === "casting") {
+        const k = f.t / 36;
+        bx = tipX + (restX - tipX) * k; by = tipY + (restY - tipY) * k - Math.sin(k * Math.PI) * H * 0.12;
+      } else if (f.phase === "waiting") {
+        bx = restX; by = restY + Math.sin(t * 2.5) * 2;
+        if (f.wait - f.t < 40 && Math.floor(f.t / 6) % 2) by += 2; // a little nibble first
+      } else if (f.phase === "bite") {
+        bx = restX + Math.sin(f.t * 0.9) * 2; by = restY + 7; under = true;
+      } else if (f.phase === "reeling") {
+        const k = f.t / 50;
+        bx = restX + (W * 0.42 - restX) * k; by = restY + Math.sin(f.t * 0.6) * 3;
+      }
+      if (f.phase !== "ready" && f.phase !== "caught") {
+        c.strokeStyle = "rgba(58,51,48,.7)"; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(tipX, tipY); c.quadraticCurveTo((tipX + bx) / 2, Math.max(tipY, by) - 10, bx, by); c.stroke();
+        if (f.phase !== "casting") this.ripples(bx, restY + 2, 26, t);
+        c.save();
+        if (under) { c.beginPath(); c.rect(0, 0, W, restY + 2); c.clip(); }
+        c.fillStyle = "#fff"; c.beginPath(); c.arc(bx, by, 7, 0, Math.PI); c.fill();
+        c.fillStyle = "#E25636"; c.beginPath(); c.arc(bx, by, 7, Math.PI, Math.PI * 2); c.fill();
+        c.strokeStyle = D.C.ink; c.lineWidth = 2; c.beginPath(); c.arc(bx, by, 7, 0, Math.PI * 2); c.stroke();
+        c.restore();
+        if (f.phase === "bite") {
+          c.font = `bold ${Math.round(W * 0.09)}px Fredoka, sans-serif`; c.textAlign = "center";
+          c.fillStyle = "#E25636"; c.strokeStyle = "#fff"; c.lineWidth = 5;
+          const jump = Math.abs(Math.sin(f.t * 0.3)) * 8;
+          c.strokeText("!", bx, by - 22 - jump); c.fillText("!", bx, by - 22 - jump);
+          c.textAlign = "start";
+        }
+      }
+      // the catch pops up out of the water
+      if (f.phase === "caught" && f.catch) {
+        const k = Math.min(1, f.t / 20);
+        const size = Math.min(W * 0.4, H * 0.26);
+        const cy = H * sea + size * 0.4 - Math.sin(k * Math.PI / 2) * size * 0.7;
+        c.fillStyle = "rgba(255,255,255,.6)";
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + t;
+          c.beginPath(); c.arc(W * 0.6 + Math.cos(a) * size * 0.7, cy - size * 0.5 + Math.sin(a) * size * 0.5, 4, 0, Math.PI * 2); c.fill();
+        }
+        D.critter(c, f.catch, W * 0.6, cy, size, t, { happy: true });
+      }
     },
 
     drawFade() {
@@ -762,6 +1006,16 @@
         this.hudName.textContent = b.c.name;
         const hearts = "♥".repeat(b.hearts) + "♡".repeat(FRIENDS_NEEDED - b.hearts);
         if (this.hudHearts.textContent !== hearts) this.hudHearts.textContent = hearts;
+      }
+
+      // fishing
+      this.fishEl.hidden = !(this.scene === "fishing" && this.fish) || !!this.fade;
+      if (!this.fishEl.hidden) {
+        if (this.fishMsg.textContent !== this.fish.msg) this.fishMsg.textContent = this.fish.msg;
+        if (this.fishBtn.textContent !== this.fish.button) this.fishBtn.textContent = this.fish.button;
+        const live = ["ready", "bite", "caught"].includes(this.fish.phase);
+        this.fishBtn.classList.toggle("wait", !live);
+        this.fishBtn.classList.toggle("now", this.fish.phase === "bite");
       }
 
       // critter book

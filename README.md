@@ -42,7 +42,7 @@ assets/coins/       coin pictures
 
 ## Going on an Adventure
 
-Home base is Crescent Drive: Our House and Gram's House face each other across the street. Walk around the neighborhood, ride your bike, talk to people, read signs, and meet critters in the tall grass (every yard is tall grass). Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (the ☰ button). Progress is saved in the browser.
+Home base is Crescent Drive: Our House and Gram's House face each other across the street, and Forbes Bay is to the east. Walk around the neighborhood, ride your bike, swim in the bay and the creek (sea critters live there), go fishing with Uncle Pat at the dock once you answer his math question, talk to people, read signs, and meet critters in the tall grass (every yard is tall grass). Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (the ☰ button). Progress is saved in the browser.
 
 - **Pictures** (`js/games/adventure/draw.js`): every picture is either one of your hand-drawn PNGs or a placeholder doodle drawn in code. Add your drawings one at a time; anything not drawn yet keeps its placeholder.
 - **Maps, people, critters, questions** (`js/games/adventure/world.js`): maps are one character per tile, using the `TILES` key at the top of the file. Each map lists its `warps` (doors), `people` (where they stand, what they say, whether they wander), `signs`, and which `critters` live in its tall grass.

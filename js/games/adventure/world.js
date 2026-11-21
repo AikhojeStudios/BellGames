@@ -14,7 +14,8 @@
      ground: how the floor of the tile is drawn (see GROUND in draw.js)
      object: something standing on it, like a tree or a house (OBJECTS in draw.js)
      solid:  can't walk onto it
-     grass:  tall grass, where critters hide                                   */
+     grass:  tall grass, where critters hide
+     swim:   water you can swim in, where sea critters live                    */
   const TILES = {
     ".": { ground: "lawn" },
     ",": { ground: "tall", grass: true },
@@ -23,7 +24,10 @@
     "d": { ground: "drive" },
     "D": { ground: "porch" },
     "*": { ground: "flowers" },
-    "~": { ground: "water", solid: true },
+    "~": { ground: "water", swim: true },
+    "-": { ground: "sand" },
+    "#": { ground: "dock" },
+    "O": { ground: "water", object: "boat", solid: true },
     "T": { ground: "lawn", object: "tree", solid: true },
     "F": { ground: "lawn", object: "fence", solid: true },
     "S": { ground: "lawn", object: "sign", solid: true },
@@ -49,6 +53,11 @@
     sprigsnake: { name: "SPRIGSNAKE", art: "sprigsnake", about: "A bright green snake. It hides in the grass and is very shy." },
     sootsnake: { name: "SOOTSNAKE", art: "sootsnake", about: "A shiny black snake. A great climber that naps up in trees." },
     hoodini: { name: "HOODINI", art: "hoodini", about: "A cobra that puffs out its hood to look big. Very rare!" },
+    // in the water
+    finny: { name: "FINNY", art: "finny", water: true, about: "A sunny little fish. It swims in circles when it's happy." },
+    pinchy: { name: "PINCHY", art: "pinchy", water: true, about: "A crab that walks sideways. Its claws wave hello." },
+    shelby: { name: "SHELBY", art: "shelby", water: true, about: "A slow and gentle turtle. It has been swimming here for years." },
+    bloop: { name: "BLOOP", art: "bloop", water: true, about: "A wobbly jellyfish. Look, but don't touch!" },
   };
 
   /* ---------- maps ---------- */
@@ -107,44 +116,44 @@
       name: "Crescent Drive",
       border: "T",
       tiles: [
-        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
-        "==============================",
-        "==============================",
-        "::==:::::::::::==:::::::==::::",
-        ",,==S,,,,,,,,,S==,,,,,,S==,T,,",
-        ",,==Dhhh,,,hhhD==Dhhh,,,==,,,,",
-        ",,==dhhh,T,hhhd==dhhh,T,==T,,,",
-        ",,==,,,,,,,,,,,==,,,,,,,==,,,,",
-        ",,==Dhhh,,,hhhD==Dhhh,,,==,,,,",
-        ",,==dhhh,*,hhhd==dhhh,,,==,,,,",
-        ",,==,,,,,,,,,,,===========,,,,",
-        ",,==Dhhh,,,hhhD===========,,,,",
-        ",,==dhhh,T,hhhd==S,,,,,,==,,~~",
-        ",,==,,,,,,,,,,S==DhhhT,,==,,~~",
-        ",,==Dhhh,,,hhhD==dhhh,,,==*,~~",
-        ",,==dhhh,,,hhhd==S,,,,T,==,,~~",
-        ",,==,,,,,,,,,,,==Dhhh,,,==,~~,",
-        ",,==Dhhh,*,hhhD==dhhh,,,==,~~,",
-        ",,==dhhh,,,hhhd==,,,,T,,==,~~,",
-        ",,==,,,,,,,,,,,==,,,,,,,==,~~,",
-        ",,==DhhhT,,hhhD==,,,,,,,==,,~~",
-        ",,==dhhh,,,hhhd===========,,~~",
-        ",,==,,,,,,,,,,,===========,,~~",
-        ",,==Dhhh,,,hhhD==S,,,,,D,d,,~~",
-        ",,==dhhh,*,hhhd==Dhhh,hhh,,~~,",
-        ",,==,,,,,,,,,,,==dhhh,hhh,,~~,",
-        ",,==Dhhh,,,hhhD==,,,,,,,,,,~~,",
-        ",,==dhhh,,Thhhd==Dhhh,,,,,,~~,",
-        ",,==,,,,,,,,,,,==dhhh,,T,,,,~~",
-        ",,==Dhhh,,,hhhD==,,,,,,,,,,,~~",
-        ",,==dhhh,,,hhhd==Dhhh,,,,,,,~~",
-        ",,==,,,,,,,,,,,==dhhh,,,,,,,~~",
-        ",,===============,,,,,,,,,,~~,",
-        ",,===============,,,,,,,,,,~~,",
-        ",,==,,D,d,,D,d,,,,,,,,,,,,,~~,",
-        ",,==,hhh,,hhh,,,,,,,*,,,,,,~~,",
-        ",,==,hhh,,hhhT,,,,,,,,,,,,,,~~",
-        "TT==TTTTTTTTTTTTTTTTTTTTTTT,~~",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "========================================",
+        "========================================",
+        "::==:::::::::::==:::::::==:~~~~~~~~~~~~~",
+        ",,==S,,,,,,,,,S==,,,,,,S==-~~~~~~~~~~~~~",
+        ",,==Dhhh,,,hhhD==Dhhh,,,==-~~~~~~~~~~~~~",
+        ",,==dhhh,T,hhhd==dhhh,T,==-~~~~~~~~~~~~~",
+        ",,==,,,,,,,,,,,==,,,,,,,==S~~~~~~##~~~~~",
+        ",,==Dhhh,,,hhhD==Dhhh,,,==-########O~~~~",
+        ",,==dhhh,*,hhhd==dhhh,,,==-~~~~~~##~~~~~",
+        ",,==,,,,,,,,,,,===========-~~~~~~~~~~~~~",
+        ",,==Dhhh,,,hhhD===========-~~~~~~~~~~~~~",
+        ",,==dhhh,T,hhhd==S,,,,,,==-~~~~~~~~~~~~~",
+        ",,==,,,,,,,,,,S==DhhhT,,==-~~~~~~~~~~~~~",
+        ",,==Dhhh,,,hhhD==dhhh,,,==-~~~~~~~~~~~~~",
+        ",,==dhhh,,,hhhd==S,,,,T,==-~~~~~~~~~~~~~",
+        ",,==,,,,,,,,,,,==Dhhh,,,==-~~~~~~~~~~~~~",
+        ",,==Dhhh,*,hhhD==dhhh,,,==-~~~~~~~~~~~~~",
+        ",,==dhhh,,,hhhd==,,,,T,,==-~~~~~~~~~~~~~",
+        ",,==,,,,,,,,,,,==,,,,,,,==-~~~~~~~~~~~~~",
+        ",,==DhhhT,,hhhD==,,,,,,,==,,~~,,,,,,,,,,",
+        ",,==dhhh,,,hhhd===========,,~~,,,,,,,,,,",
+        ",,==,,,,,,,,,,,===========,,~~,,,,,,,,T,",
+        ",,==Dhhh,,,hhhD==S,,,,,D,d,,~~,,T,,,,,,,",
+        ",,==dhhh,*,hhhd==Dhhh,hhh,,~~,,,,,,,,,,,",
+        ",,==,,,,,,,,,,,==dhhh,hhh,,~~,,,,,,,,,,,",
+        ",,==Dhhh,,,hhhD==,,,,,,,,,,~~,,,,,,,,,,,",
+        ",,==dhhh,,Thhhd==Dhhh,,,,,,~~,,,,,,,T,,,",
+        ",,==,,,,,,,,,,,==dhhh,,T,,,,~~,,,,,,,,,,",
+        ",,==Dhhh,,,hhhD==,,,,,,,,,,,~~,,,,,,,,,,",
+        ",,==dhhh,,,hhhd==Dhhh,,,,,,,~~,,,,,*,,,,",
+        ",,==,,,,,,,,,,,==dhhh,,,,,,,~~,,,,,,,,,,",
+        ",,===============,,,,,,,,,,~~,,,,,,,,,,,",
+        ",,===============,,,,,,,,,,~~,,,,,T,,,,,",
+        ",,==,,D,d,,D,d,,,,,,,,,,,,,~~,,,,,,,,,,,",
+        ",,==,hhh,,hhh,,,,,,,*,,,,,,~~,,,,,,,,,,,",
+        ",,==,hhh,,hhhT,,,,,,,,,,,,,,~~,*,,,,,,,,",
+        "TT==TTTTTTTTTTTTTTTTTTTTTTT,~~,TTTTTTTTT",
       ],
       warps: [
         { x: 14, y: 14, to: "home", tx: 3, ty: 6, dir: "up" },   // Our House
@@ -157,7 +166,8 @@
         { x: 4, y: 4, text: ["EDGEWOOD DRIVE"] },
         { x: 17, y: 12, text: ["ROCHELLE DRIVE"] },
         { x: 17, y: 23, text: ["MIDGETT DRIVE"] },
-        { x: 23, y: 4, text: ["BROTHERS DRIVE", "The creek runs along the back. Snakes love it there!"] },
+        { x: 23, y: 4, text: ["BROTHERS DRIVE", "Forbes Bay is just past the sand. Swim, but stay safe!"] },
+        { x: 26, y: 7, text: ["FORBES BAY DOCK", "Uncle Pat's boat is tied up at the end."] },
       ],
       people: [
         { x: 16, y: 8, look: "friend", dir: "down", wander: true, talk: [
@@ -165,6 +175,10 @@
         ] },
         { x: 20, y: 10, look: "friend", dir: "left", wander: true, talk: [
           "Snakes like the tall grass near the creek. Some are really shy!",
+        ] },
+        { x: 34, y: 7, look: "uncle", dir: "down", action: "fishing", talk: [
+          "UNCLE PAT: Ahoy there, kiddo! Want to go fishing?",
+          "First you have to answer my math question!",
         ] },
       ],
       // things you can pick up
@@ -177,8 +191,13 @@
         "pebblet", "flitter",
         "hoodini",
       ],
+      // who you can meet while swimming
+      waterCritters: ["finny", "finny", "finny", "pinchy", "pinchy", "shelby", "bloop"],
     },
   };
+
+  /* What can bite on Uncle Pat's line. More copies = more often. */
+  const CATCHES = ["finny", "finny", "finny", "finny", "pinchy", "pinchy", "shelby", "shelby", "bloop", "boot"];
 
   const START = { map: "home", x: 3, y: 4, dir: "down" };
 
@@ -206,5 +225,5 @@
     return { text: `${a} ${op} ${b} = ?`, answer, choices: shuffle([...choices]) };
   }
 
-  A.world = { TILES, CRITTERS, MAPS, START, makeQuestion };
+  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, makeQuestion };
 })();

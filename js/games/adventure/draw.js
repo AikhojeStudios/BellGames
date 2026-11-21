@@ -200,6 +200,32 @@
       c.fillStyle = C.water; c.fillRect(0, 0, s, s);
       for (let i = 0; i < 2; i++) line(c, s * r(), s * (0.2 + r() * 0.6), s * r(), s * (0.2 + r() * 0.6), r, s * 0.05, s * 0.03, C.waterLite);
     },
+    sand(c, s, r) {
+      c.fillStyle = "#EFDCA8"; c.fillRect(0, 0, s, s);
+      for (let i = 0; i < 10; i++) { c.fillStyle = i % 2 ? "rgba(160,120,60,.18)" : "rgba(255,255,255,.4)"; c.fillRect(r() * s, r() * s, s * 0.035, s * 0.035); }
+    },
+    dock(c, s, r, same) {
+      GROUND.water(c, s, r);
+      const m = s * 0.08;
+      const x0 = same(-1, 0) ? 0 : m, x1 = same(1, 0) ? s : s - m;
+      const y0 = same(0, -1) ? 0 : m, y1 = same(0, 1) ? s : s - m;
+      const vertical = same(0, -1) || same(0, 1);
+      const n = 4;
+      for (let i = 0; i < n; i++) {
+        if (vertical && !(same(-1, 0) || same(1, 0))) {
+          const yy = (i * s) / n;
+          blob(c, rectPts(x0, yy + s * 0.01, x1 - x0, s / n - s * 0.03, 2), r, s * 0.015);
+        } else {
+          const xx = (i * s) / n;
+          blob(c, rectPts(xx + s * 0.01, y0, s / n - s * 0.03, y1 - y0, 2), r, s * 0.015);
+        }
+        paint(c, i % 2 ? "#C79A66" : "#D2A673", s * 0.025);
+      }
+      [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].forEach(([x, y], i) => {
+        const outer = (i < 2 ? !same(0, -1) : !same(0, 1)) && (i % 2 ? !same(1, 0) : !same(-1, 0));
+        if (outer) { ellipse(c, x, y, s * 0.07, s * 0.07); paint(c, "#7A5634", s * 0.025); }
+      });
+    },
     floor(c, s, r) {
       c.fillStyle = C.wood; c.fillRect(0, 0, s, s);
       c.strokeStyle = C.woodLine; c.lineWidth = s * 0.025;
@@ -310,6 +336,17 @@
       if (!same(1, 0)) line(c, x1, y0, x1, bottom, r, s * 0.02, s * 0.045);
       if (!same(0, -1)) line(c, x0, y0, x1, y0, r, s * 0.02, s * 0.045);
     },
+    boat(c, s, r) {
+      ellipse(c, s * 0.5, s * 0.6, s * 0.95, s * 0.4); paint(c, "rgba(255,255,255,.3)");
+      const hull = [[-0.35, 0.35], [0.9, 0.3], [1.35, 0.55], [0.9, 0.82], [-0.35, 0.78], [-0.42, 0.56]].map(([x, y]) => [x * s, y * s]);
+      blob(c, hull, r, s * 0.02); paint(c, "#F4EFE4", s * 0.045);
+      const inner = [[-0.25, 0.43], [0.85, 0.4], [1.15, 0.55], [0.85, 0.72], [-0.25, 0.7]].map(([x, y]) => [x * s, y * s]);
+      blob(c, inner, r, s * 0.02); paint(c, "#C99A6B", s * 0.03);
+      line(c, s * 0.2, s * 0.42, s * 0.2, s * 0.71, r, s * 0.01, s * 0.06, "#A4774A");
+      line(c, s * 0.6, s * 0.41, s * 0.6, s * 0.72, r, s * 0.01, s * 0.06, "#A4774A");
+      line(c, -s * 0.34, s * 0.8, s * 0.88, s * 0.84, r, s * 0.01, s * 0.05, "#D9433B");
+      line(c, -s * 0.42, s * 0.56, -s * 0.9, s * 0.4, r, s * 0.02, s * 0.025, "#8A6A4A");
+    },
     bed(c, s, r) {
       blob(c, rectPts(s * 0.08, s * 0.02, s * 0.84, s * 0.94), r, s * 0.03); paint(c, "#8DB8E0", s * 0.04);
       blob(c, rectPts(s * 0.18, s * 0.08, s * 0.64, s * 0.24), r, s * 0.03); paint(c, "#FFFFFF", s * 0.035);
@@ -383,6 +420,7 @@
     friend: { shirt: "#7CC47F", pants: "#6B5B95", skin: "#C98E63", hair: "#2B1D14", bow: "#F28DA8" },
     mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#E8B48A", hair: "#7A4B2A", long: true },
     elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#F0C8A8", hair: "#E8E4DC", glasses: true },
+    uncle: { shirt: "#4F86B0", pants: "#6B5B4B", skin: "#E0AC85", hair: "#8B5A2B", hat: "#C9B27C", beard: true },
   };
 
   /**
@@ -461,6 +499,13 @@
       if (L.cap) {
         ellipse(c, side ? cx - 4.2 * u : cx, hy - 1.2 * u, side ? 2.6 * u : 3.6 * u, 1 * u); paint(c, L.cap, lw);
       }
+      if (L.hat) {
+        ellipse(c, cx + (side ? -0.6 * u : 0), hy - 2.4 * u, 6.2 * u, 1.6 * u); paint(c, L.hat, lw);
+        c.beginPath(); c.ellipse(cx, hy - 2.6 * u, 3.8 * u, 3 * u, 0, Math.PI, Math.PI * 2); c.closePath(); paint(c, L.hat, lw);
+      }
+      if (L.beard) {
+        c.beginPath(); c.ellipse(side ? cx - 1.2 * u : cx, hy + 2.2 * u, side ? 3 * u : 3.8 * u, 2.4 * u, 0, 0, Math.PI); c.closePath(); paint(c, L.hair, lw);
+      }
       if (L.bow) { ellipse(c, cx + 3.4 * u, hy - 3.6 * u, 1.6 * u, 1.1 * u, 0.5); paint(c, L.bow, lw); }
       // face
       const blink = Math.floor((t + cx * 0.01) * 10) % 37 === 0;
@@ -477,6 +522,9 @@
       c.beginPath(); c.arc(side ? cx - 2.6 * u : cx, hy + 1.8 * u, 1.2 * u, 0.15 * Math.PI, 0.85 * Math.PI); ink(c, lw * 0.9);
     } else if (L.cap) {
       c.beginPath(); c.ellipse(cx, hy - 1 * u, 4.6 * u, 3.4 * u, 0, Math.PI, Math.PI * 2); paint(c, L.cap, lw);
+    } else if (L.hat) {
+      ellipse(c, cx, hy - 2.4 * u, 6.2 * u, 1.6 * u); paint(c, L.hat, lw);
+      c.beginPath(); c.ellipse(cx, hy - 2.6 * u, 3.8 * u, 3 * u, 0, Math.PI, Math.PI * 2); c.closePath(); paint(c, L.hat, lw);
     }
     c.restore();
   }
@@ -584,6 +632,74 @@
         });
       });
       [-1, 1].forEach((k) => { ellipse(c, cx - 1 * u + k * 4 * u, base - 0.8 * u, 2.4 * u, 1.2 * u); paint(c, "#F2B8C0", lw * 0.8); });
+    } else if (id === "finny") {
+      const by = base - 12 * u + Math.sin(t * 2.2) * 1.4 * u;
+      const wag = Math.sin(t * 7) * 1.8 * u;
+      c.beginPath(); c.moveTo(cx + 9 * u, by); c.lineTo(cx + 17 * u, by - 6 * u + wag); c.lineTo(cx + 17 * u, by + 6 * u + wag); c.closePath(); paint(c, "#4F9FB5", lw);
+      c.beginPath(); c.moveTo(cx - 4 * u, by - 7 * u); c.quadraticCurveTo(cx + 2 * u, by - 13 * u, cx + 7 * u, by - 6 * u); c.closePath(); paint(c, "#4F9FB5", lw);
+      ellipse(c, cx, by, 12 * u, 8 * u + breathe / 2); paint(c, "#6FB7C9", lw);
+      ellipse(c, cx - 1 * u, by + 3.4 * u, 8 * u, 3.4 * u); paint(c, "#F4B860");
+      [2, 6].forEach((x) => { c.beginPath(); c.moveTo(cx + x * u, by - 6 * u); c.quadraticCurveTo(cx + (x + 1.5) * u, by, cx + x * u, by + 6 * u); ink(c, lw * 0.8, "#4F9FB5"); });
+      ellipse(c, cx + 1 * u, by + 1 * u, 3 * u, 1.6 * u, 0.4 + Math.sin(t * 5) * 0.3); paint(c, "#4F9FB5", lw * 0.7);
+      if (blink) { c.beginPath(); c.moveTo(cx - 8 * u, by - 2 * u); c.lineTo(cx - 5 * u, by - 2 * u); ink(c, lw); }
+      else { ellipse(c, cx - 6.5 * u, by - 2 * u, 2.2 * u, 2.4 * u); paint(c, "#fff", lw * 0.7); ellipse(c, cx - 7 * u, by - 1.8 * u, 1.1 * u, 1.3 * u); paint(c, C.ink); }
+      c.beginPath(); c.arc(cx - 10.5 * u, by + 2 * u, 1.2 * u, -0.3 * Math.PI, 0.5 * Math.PI); ink(c, lw * 0.8);
+      ellipse(c, cx - 15 * u, by - 7 * u - (t * 6 % 6) * u, 1.2 * u, 1.2 * u); ink(c, lw * 0.6, "#7CC4E4");
+    } else if (id === "pinchy") {
+      const snap = Math.abs(Math.sin(t * 4)) * 0.5;
+      [-1, 1].forEach((k) => {
+        [0, 1, 2].forEach((i) => {
+          c.beginPath(); c.moveTo(cx + k * 8 * u, base - 5 * u + i * 1.6 * u); c.lineTo(cx + k * (13 + i) * u, base - 1 * u + i * 0.4 * u); ink(c, lw * 1.1, "#C4552F");
+        });
+        c.beginPath(); c.moveTo(cx + k * 7 * u, base - 10 * u); c.quadraticCurveTo(cx + k * 12 * u, base - 13 * u, cx + k * 12 * u, base - 17 * u); ink(c, lw * 1.4, "#C4552F");
+        c.save(); c.translate(cx + k * 12.5 * u, base - 19 * u); c.scale(k, 1);
+        c.beginPath(); c.moveTo(0, 2 * u); c.ellipse(0, 0, 3.6 * u, 4 * u, 0, Math.PI * (0.55 + snap * 0.3), Math.PI * (2.45 - snap * 0.3)); c.closePath();
+        paint(c, "#E8704A", lw); c.restore();
+      });
+      ellipse(c, cx, base - 7 * u - breathe / 2, 11 * u, 6.5 * u + breathe / 2); paint(c, "#E8704A", lw);
+      [-1, 1].forEach((k) => {
+        c.beginPath(); c.moveTo(cx + k * 3 * u, base - 12 * u); c.lineTo(cx + k * 3.6 * u, base - 16 * u); ink(c, lw, "#C4552F");
+        if (blink) { c.beginPath(); c.moveTo(cx + k * 3.6 * u - 1 * u, base - 17 * u); c.lineTo(cx + k * 3.6 * u + 1 * u, base - 17 * u); ink(c, lw); }
+        else { ellipse(c, cx + k * 3.6 * u, base - 17 * u, 1.8 * u, 2 * u); paint(c, "#fff", lw * 0.7); ellipse(c, cx + k * 3.6 * u, base - 16.6 * u, 0.9 * u, 1.1 * u); paint(c, C.ink); }
+      });
+      c.beginPath(); c.arc(cx, base - 7 * u, 2 * u, 0.15 * Math.PI, 0.85 * Math.PI); ink(c, lw * 0.9);
+      cheeks(base - 7.5 * u, 6 * u);
+    } else if (id === "shelby") {
+      const peek = Math.sin(t * 1.5) * 0.8 * u;
+      [[-8, 1, -0.5], [8, 1, 0.5], [-7, -10, 0.6], [7, -10, -0.6]].forEach(([x, y, a]) => {
+        ellipse(c, cx + x * u, base + y * u - 1 * u, 4 * u, 2.2 * u, a); paint(c, "#9CCB7A", lw);
+      });
+      ellipse(c, cx - 13 * u - peek, base - 8 * u, 4.6 * u, 4 * u); paint(c, "#9CCB7A", lw);
+      ellipse(c, cx, base - 7 * u - breathe / 2, 12 * u, 8.6 * u + breathe / 2); paint(c, "#6E9F5A", lw);
+      [[-5, -9], [3, -10], [-1, -4], [7, -5], [-7, -3]].forEach(([x, y]) => {
+        blob(c, ellipsePts(cx + x * u, base + y * u, 2.6 * u, 2.2 * u, 6), rng(x * 7 + y), 0.4 * u); paint(c, "#8DBE70", lw * 0.6);
+      });
+      const ex = cx - 14.5 * u - peek;
+      if (blink) { c.beginPath(); c.moveTo(ex - 1 * u, base - 9 * u); c.lineTo(ex + 1 * u, base - 9 * u); ink(c, lw); }
+      else { ellipse(c, ex, base - 9 * u, 0.9 * u, 1.1 * u); paint(c, C.ink); }
+      c.beginPath(); c.arc(ex + 1 * u, base - 7 * u, 1.3 * u, 0.1 * Math.PI, 0.8 * Math.PI); ink(c, lw * 0.8);
+    } else if (id === "bloop") {
+      const by = base - 15 * u + Math.sin(t * 1.8) * 2 * u;
+      const squish = 1 + Math.sin(t * 3.6) * 0.06;
+      for (let i = 0; i < 5; i++) {
+        const x = cx + (i - 2) * 3.6 * u;
+        c.beginPath(); c.moveTo(x, by);
+        for (let k = 1; k <= 6; k++) c.lineTo(x + Math.sin(t * 3 + i + k) * 1.4 * u, by + k * 2.4 * u);
+        ink(c, lw, "#D97AA6");
+      }
+      c.beginPath(); c.ellipse(cx, by, 11 * u * (2 - squish), 10 * u * squish, 0, Math.PI, Math.PI * 2);
+      c.quadraticCurveTo(cx, by + 3 * u, cx - 11 * u * (2 - squish), by); c.closePath();
+      paint(c, "rgba(243,166,200,.9)", lw);
+      ellipse(c, cx - 4 * u, by - 6 * u, 3 * u, 2 * u, -0.4); paint(c, "rgba(255,255,255,.55)");
+      eyes(by - 3 * u, 3.6 * u, 1.3 * u);
+      cheeks(by - 0.8 * u, 6.4 * u);
+    } else if (id === "boot") {
+      c.beginPath(); c.moveTo(cx - 6 * u, base - 24 * u); c.lineTo(cx + 3 * u, base - 24 * u); c.lineTo(cx + 3 * u, base - 9 * u);
+      c.quadraticCurveTo(cx + 13 * u, base - 8 * u, cx + 12 * u, base - 2 * u); c.lineTo(cx - 7 * u, base - 2 * u); c.closePath();
+      paint(c, "#7A5634", lw);
+      c.beginPath(); c.moveTo(cx - 7 * u, base - 4 * u); c.lineTo(cx + 12 * u, base - 4 * u); ink(c, lw * 1.2);
+      [-20, -16, -12].forEach((y) => { c.beginPath(); c.moveTo(cx - 3 * u, base + y * u); c.lineTo(cx + 1 * u, base + y * u - 1 * u); ink(c, lw * 0.8, "#E8D6B0"); });
+      ellipse(c, cx + 6 * u, base - 26 * u - (t * 8 % 8) * u, 1.3 * u, 1.3 * u); ink(c, lw * 0.6, "#7CC4E4");
     } else if (id === "flitter") {
       const hover = -5 * u + Math.sin(t * 3) * 1.6 * u;
       const flap = 0.7 + 0.3 * Math.abs(Math.sin(t * 7));
