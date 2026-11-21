@@ -509,9 +509,10 @@
 
   /* ---------- people ---------- */
   const LOOKS = {
-    hero: { shirt: "#E8604C", pants: "#3E5C8A", skin: "#F2C49B", hair: "#5A3A26", cap: "#2F7FC1", pack: "#F2B544" },
+    // the hero: white tee with a print on the back, green shorts, braids
+    hero: { shirt: "#F3F1EA", pants: "#2F7A4F", skin: "#6E4128", hair: "#1C1310", braids: true, shorts: true, print: "#9A9A96" },
     friend: { shirt: "#7CC47F", pants: "#6B5B95", skin: "#C98E63", hair: "#2B1D14", bow: "#F28DA8" },
-    brother: { shirt: "#F3F1EA", pants: "#2F7A4F", skin: "#7A4A2E", hair: "#1C1310", braids: true },
+    brother: { shirt: "#F3F1EA", pants: "#3D4F7A", skin: "#7A4A2E", hair: "#1C1310", braids: true, shorts: true },
     mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#E8B48A", hair: "#7A4B2A", long: true },
     elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#F0C8A8", hair: "#E8E4DC", glasses: true },
     uncle: { shirt: "#4F86B0", pants: "#6B5B4B", skin: "#E0AC85", hair: "#8B5A2B", hat: "#C9B27C", beard: true },
@@ -556,14 +557,19 @@
     ellipse(c, cx, foot, 5 * u, 1.6 * u); paint(c, "rgba(0,0,0,.16)");
     // legs
     const legTop = foot - 5.5 * u;
+    // a leg: shorts show skin below them
+    const leg = (x, y) => {
+      if (L.shorts) {
+        c.beginPath(); c.roundRect(x, y, 2.6 * u, 5.5 * u, u); paint(c, L.skin, lw);
+        c.beginPath(); c.roundRect(x - 0.2 * u, y - 0.2 * u, 3 * u, 2.6 * u, 0.8 * u); paint(c, L.pants, lw);
+      } else { c.beginPath(); c.roundRect(x, y, 2.6 * u, 5.5 * u, u); paint(c, L.pants, lw); }
+    };
     if (side) {
-      for (const k of [-1, 1]) {
-        c.beginPath(); c.roundRect(cx - 1.3 * u + swing * k * 1.8 * u, legTop, 2.6 * u, 5.5 * u, u); paint(c, L.pants, lw);
-      }
+      for (const k of [-1, 1]) leg(cx - 1.3 * u + swing * k * 1.8 * u, legTop);
     } else {
       [-1, 1].forEach((k) => {
         const lift = Math.max(0, swing * k) * 1.4 * u;
-        c.beginPath(); c.roundRect(cx + k * 2.1 * u - 1.3 * u, legTop - lift, 2.6 * u, 5.5 * u, u); paint(c, L.pants, lw);
+        leg(cx + k * 2.1 * u - 1.3 * u, legTop - lift);
       });
     }
     // backpack behind (side and front views)
@@ -572,6 +578,15 @@
     // body
     c.beginPath(); c.roundRect(cx - (side ? 3.4 : 4.4) * u, bodyTop, (side ? 6.8 : 8.8) * u, 7.2 * u, 2.2 * u); paint(c, L.shirt, lw);
     if (L.pack && dir === "up") { c.beginPath(); c.roundRect(cx - 3 * u, bodyTop + 0.8 * u, 6 * u, 5.4 * u, 1.4 * u); paint(c, L.pack, lw); }
+    if (L.print && dir === "up") {
+      // the print on the back of the tee: a hoop and net
+      c.strokeStyle = L.print; c.lineWidth = Math.max(1, lw * 0.6);
+      c.beginPath(); c.ellipse(cx, bodyTop + 2.4 * u, 2.1 * u, 1.2 * u, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath();
+      for (const k of [-1.6, -0.5, 0.5, 1.6]) { c.moveTo(cx + k * u, bodyTop + 3.2 * u); c.lineTo(cx + k * 0.6 * u, bodyTop + 5.4 * u); }
+      c.moveTo(cx - 1.4 * u, bodyTop + 4.3 * u); c.lineTo(cx + 1.4 * u, bodyTop + 4.3 * u);
+      c.stroke();
+    }
     // arms
     if (!side) {
       [-1, 1].forEach((k) => {
@@ -629,13 +644,14 @@
   /** Cornrow braids running back over the head, gathered into a little puff. */
   function braids(c, L, cx, hy, u, lw, dir) {
     const side = dir === "left" || dir === "right";
+    // side views are always drawn facing left (person() mirrors the canvas for right)
     if (dir === "up") { ellipse(c, cx, hy + 2.8 * u, 1.9 * u, 2 * u); paint(c, L.hair, lw); }
-    else if (side) { ellipse(c, cx + (dir === "left" ? 4.4 : -4.4) * u, hy + 0.6 * u, 1.7 * u, 1.9 * u); paint(c, L.hair, lw); }
+    else if (side) { ellipse(c, cx + 4.4 * u, hy + 0.6 * u, 1.7 * u, 1.9 * u); paint(c, L.hair, lw); }
     c.strokeStyle = "rgba(255,255,255,.22)"; c.lineWidth = Math.max(1, lw * 0.55); c.lineCap = "round";
     for (const k of [-2.2, -0.7, 0.8, 2.3]) {
       c.beginPath();
       if (dir === "up") { c.moveTo(cx + k * u, hy - 4 * u); c.quadraticCurveTo(cx + k * 1.15 * u, hy - 1 * u, cx + k * 0.5 * u, hy + 2.2 * u); }
-      else if (side) { c.moveTo(cx + (dir === "left" ? -2.5 : 2.5) * u, hy - 3.8 * u + k * 0.45 * u); c.quadraticCurveTo(cx, hy - 4.6 * u + k * 0.5 * u, cx + (dir === "left" ? 3.6 : -3.6) * u, hy - 1.6 * u + k * 0.5 * u); }
+      else if (side) { c.moveTo(cx - 2.5 * u, hy - 3.8 * u + k * 0.45 * u); c.quadraticCurveTo(cx, hy - 4.6 * u + k * 0.5 * u, cx + 3.6 * u, hy - 1.6 * u + k * 0.5 * u); }
       else { c.moveTo(cx + k * u, hy - 1.2 * u); c.quadraticCurveTo(cx + k * 1.1 * u, hy - 3.6 * u, cx + k * 0.8 * u, hy - 4.3 * u); }
       c.stroke();
     }
