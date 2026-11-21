@@ -81,7 +81,8 @@
         { x: 5, y: 3, look: "mom", dir: "down", talk: [
           "MOM: Off on a Garter Quest? How exciting!",
           "Critters hide in the tall grass in everyone's yards on Crescent Drive. Answer their questions to make friends.",
-          "Your bike is right outside by the driveway. Gram lives just across the street. Be home for dinner!",
+          "Your bike is right outside by the driveway, and your little brother wants a ride in the wagon!",
+          "Gram lives just across the street. Be home for dinner!",
         ] },
       ],
     },
@@ -142,6 +143,10 @@
     MAPS.home.warps[0].tx = sp.ours.land[0]; MAPS.home.warps[0].ty = sp.ours.land[1];
     MAPS.grams.warps[0].tx = sp.grams.land[0]; MAPS.grams.warps[0].ty = sp.grams.land[1];
     const ox = sp.ours.door[0];
+    // the wagon waits on the other side of our driveway from the bike
+    const [lx, ly] = sp.ours.land;
+    const wagonSpot = [[lx - 1, ly], [lx - 1, ly + 1], [lx + 1, ly + 1], [lx - 2, ly]].find(([x, y]) =>
+      G.tiles[y]?.[x] === "," && !(sp.bike && sp.bike[0] === x && sp.bike[1] === y));
     return {
       name: "Crescent Drive",
       border: "T",
@@ -169,6 +174,7 @@
       // things you can pick up
       items: [
         ...(sp.bike ? [{ x: sp.bike[0], y: sp.bike[1], kind: "bike" }] : []),
+        ...(wagonSpot ? [{ x: wagonSpot[0], y: wagonSpot[1], kind: "wagon", dir: "down" }] : []),
         { x: sp.dock.boat[0], y: sp.dock.boat[1], kind: "boat", dir: "right" },
       ],
       // Sea routes to other places go here: a warp with byBoat: true only works

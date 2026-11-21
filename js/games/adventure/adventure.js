@@ -19,6 +19,8 @@
   const BIKE_STEP = 8;        // frames to ride one tile
   const SWIM_STEP = 20;       // frames to swim one tile
   const BOAT_STEP = 10;       // frames to row one tile
+  const WAGON_STEP = 11;      // frames to push the wagon one tile
+  const BROTHER_SAYS = ["Wheee!", "Faster!", "Again! Again!", "Beep beep!", "Vroom!", "This is the best!", "Woo-hoo!", "Turbo mode!"];
   const BITE_WINDOW = { easy: 80, medium: 60, hard: 45 }; // frames to react when a fish bites
   const NPC_STEP = 22;        // people stroll a bit slower
   const LINE = 30;            // characters per line of talking
@@ -184,6 +186,10 @@
       const fresh = (m) => !MAPS[m]?.layout || save?.layouts?.[m] === MAPS[m].layout;
       const at = save && MAPS[save.map] && fresh(save.map) ? save : START;
       if (this.bike && !fresh(this.bike.map)) this.bike = this.bikeHome();
+      // the wagon: parked somewhere (you start out walking)
+      this.wagoning = false;
+      this.wagon = save?.wagon && MAPS[save.wagon.map] && fresh(save.wagon.map) ? save.wagon : this.itemHome("wagon");
+      this.bubble = null;
       // the boat: parked somewhere, or you're in it
       this.boating = !!save?.boating && fresh(save?.map);
       this.boat = this.boating ? null : save?.boat && MAPS[save.boat.map] && fresh(save.boat.map) ? save.boat : this.boatHome();
@@ -219,6 +225,7 @@
         map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir,
         friends: [...this.friends], seen: [...this.seen], hasBike: this.hasBike,
         boating: !!this.boating,
+        wagon: this.wagon || { map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir },
         boat: this.boat || { map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir },
         // while riding, the bike is wherever you are
         bike: this.bike || { map: this.mapId, x: this.player.x, y: this.player.y },
@@ -227,6 +234,15 @@
     },
 
     /** The bike's starting spot: the first map that lists one in its items. */
+    /** Where an item of this kind starts: the first map that lists one. */
+    itemHome(kind) {
+      for (const [id, m] of Object.entries(MAPS)) {
+        const it = (m.items || []).find((i) => i.kind === kind);
+        if (it) return { map: id, x: it.x, y: it.y, dir: it.dir || "right" };
+      }
+      return null;
+    },
+
     /** The boat's starting spot: the first map that lists one in its items. */
     boatHome() {
       for (const [id, m] of Object.entries(MAPS)) {
@@ -269,7 +285,8 @@
       this.people = (this.map.people || []).map((p) => ({
         ...p, home: { x: p.x, y: p.y }, fromX: p.x, fromY: p.y, moving: false, t: 0, wait: randInt(60, 200),
       }));
-      this.items = (this.map.items || []).filter((it) => it.kind !== "bike" && it.kind !== "boat");
+      this.items = (this.map.items || []).filter((it) => !["bike", "boat", "wagon"].includes(it.kind));
+      if (this.wagon && this.wagon.map === id) this.items.push({ kind: "wagon", x: this.wagon.x, y: this.wagon.y, dir: this.wagon.dir });
       if (this.boat && this.boat.map === id) this.items.push({ kind: "boat", x: this.boat.x, y: this.boat.y, dir: this.boat.dir });
       if (this.boating && !this.tileAt(x, y).swim) this.boating = false;
       if (this.bike && this.bike.map === id) this.items.push({ kind: "bike", x: this.bike.x, y: this.bike.y });
@@ -301,7 +318,7 @@
     tileAt(x, y) { return TILES[this.charAt(x, y)] || TILES[this.map.border]; },
     personAt(x, y) { return this.people.find((p) => p.x === x && p.y === y); },
     itemAt(x, y) { return this.items.find((it) => it.x === x && it.y === y); },
-    stepTime(x, y) { return this.boating ? BOAT_STEP : this.riding ? BIKE_STEP : this.tileAt(x, y).swim ? SWIM_STEP : STEP; },
+    stepTime(x, y) { return this.boating ? BOAT_STEP : this.wagoning ? WAGON_STEP : this.riding ? BIKE_STEP : this.tileAt(x, y).swim ? SWIM_STEP : STEP; },
 
     blocked(x, y, who) {
       if (y < 0 || y >= this.map.tiles.length || x < 0 || x >= this.map.tiles[0].length) return true;
@@ -355,12 +372,13 @@
         if (p.t < p.dur) return;
         p.moving = false;
         p.chain = true;
+        if (this.wagoning && (!this.bubble || this.tick > this.bubble.until + 120) && Math.random() < 0.12) this.brotherSays(pick(BROTHER_SAYS));
         if (this.arrive()) return;
       }
       if (p.bumpWait > 0) p.bumpWait--;
       if (Input.take("start")) return this.openStartMenu();
       if (Input.take("a")) return this.interact();
-      if (Input.take("b")) return this.boating ? this.leaveBoat() : this.bikeButton();
+      if (Input.take("b")) return this.boating ? this.leaveBoat() : this.wagoning ? this.parkWagon() : this.bikeButton();
 
       const d = Input.dir();
       if (!d) { p.chain = false; p.turn = 0; return; }
@@ -381,6 +399,10 @@
           }
           return;
         }
+      } else if (this.wagoning && this.tileAt(nx, ny).swim) {
+        p.chain = false;
+        if (!p.bumpWait) { sfx.bump(); p.bumpWait = 30; this.say(["Wagons don't float! Press B to park it first."]); }
+        return;
       } else if (this.riding && this.tileAt(nx, ny).swim) {
         p.chain = false;
         if (!p.bumpWait) { sfx.bump(); p.bumpWait = 18; this.say(["Bikes can't swim! Press B to hop off first."]); }
@@ -396,6 +418,33 @@
       p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime(nx, ny);
       p.ease = !this.boating && (this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim);
     },
+
+    /* ---------------- the wagon ---------------- */
+    startWagon(wagon) {
+      if (this.riding) return this.say(["Hop off your bike first! Press B."]);
+      this.items = this.items.filter((it) => it !== wagon);
+      this.wagon = null;
+      this.wagoning = true;
+      this.player.dir = wagon.dir || this.player.dir;
+      tone(520, 0.08, "triangle", 0.1); tone(780, 0.1, "triangle", 0.1, 0.08);
+      this.save();
+      if (!this.pushedBefore) {
+        this.pushedBefore = true;
+        this.say(["Your little brother hops in the wagon!", "LITTLE BRO: Push me! Push me! (Press B to park the wagon.)"]);
+      } else this.brotherSays("Yay! Let's go!");
+    },
+
+    /** Park the wagon on a tile (where you are, unless given). */
+    parkWagon(x = this.player.x, y = this.player.y) {
+      this.wagoning = false;
+      this.wagon = { map: this.mapId, x, y, dir: this.player.dir };
+      this.items.push({ kind: "wagon", x, y, dir: this.player.dir });
+      tone(440, 0.08, "triangle", 0.1);
+      this.save();
+      this.brotherSays("That was fun! Again later!");
+    },
+
+    brotherSays(text) { this.bubble = { text, until: this.tick + 150 }; },
 
     /* ---------------- the boat ---------------- */
     boardBoat(boat) {
@@ -480,6 +529,7 @@
       const warp = (this.map.warps || []).find((w) => w.x === p.x && w.y === p.y && !!w.byBoat === !!this.boating);
       if (warp) {
         if (this.riding && MAPS[warp.to].indoors) this.getOff(p.fromX, p.fromY);
+        if (this.wagoning && MAPS[warp.to].indoors) this.parkWagon(p.fromX, p.fromY);
         sfx.door();
         this.transition(() => { this.loadMap(warp.to, warp.tx, warp.ty, warp.dir); this.save(); });
         return true;
@@ -527,6 +577,7 @@
       const item = this.itemAt(fx, fy);
       if (item && item.kind === "bike") return this.getOn(item);
       if (item && item.kind === "boat") return this.boardBoat(item);
+      if (item && item.kind === "wagon") return this.startWagon(item);
       const sign = (this.map.signs || []).find((s) => s.x === fx && s.y === fy);
       if (sign) this.say(sign.text);
     },
@@ -1010,7 +1061,9 @@
         ...actors.map((a) => ({ y: a.at.y + 0.95, tx: Math.round(a.at.x), ty: Math.round(a.at.y), actor: true,
           cx: a.at.x * T + T / 2 - camX, base: a.at.y * T + T * 0.9 - camY, draw: (cc) => this.drawActor(a, camX, camY, t, cc) })),
         ...this.items.map((it) => ({ y: it.y + 0.9, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.92 - camY,
-          draw: (cc) => it.kind === "boat"
+          draw: (cc) => it.kind === "wagon"
+            ? D.wagon(cc, it.x * T + T / 2 - camX, it.y * T + T * 0.9 - camY, T, it.dir || "right", t, null, false, null)
+            : it.kind === "boat"
             ? D.boat(cc, it.x * T + T / 2 - camX, it.y * T + T * 0.62 - camY, T, it.dir || "right", t, false)
             : D.object(cc, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0) })),
       ].sort((a, b) => a.y - b.y);
@@ -1051,6 +1104,9 @@
 
       things.forEach((it) => it.draw(c));
       this.drawDrops(c, camX, camY);
+      if (!this.wagoning && this.bubble && this.tick < this.bubble.until && this.wagon && this.wagon.map === this.mapId) {
+        this.speech(c, this.bubble.text, this.wagon.x * T + T / 2 - camX, this.wagon.y * T - camY - T * 0.3);
+      }
     },
 
     drawActor({ e, look, dur, at }, camX, camY, t, cc) {
@@ -1059,6 +1115,19 @@
       const foot = at.y * T + T * 0.9 - camY;
       const phase = e.moving ? (e.t / dur) * 0.5 + (e.leg ? 0.5 : 0) : null;
       const gx0 = Math.round(at.x), gy0 = Math.round(at.y);
+      if (e === this.player && this.wagoning) {
+        // pushing the wagon: it rolls just ahead of you, little brother inside
+        const [dx, dy] = DIRS[e.dir];
+        const wx = cx + dx * T * 0.82, wy = foot + dy * T * 0.72;
+        const grip = [cx + dx * T * 0.3, foot - T * 0.5 + (dy > 0 ? T * 0.12 : dy < 0 ? -T * 0.05 : 0)];
+        const drawWagon = () => D.wagon(c, wx, wy, T, e.dir, t, phase, true, grip);
+        if (e.dir !== "down") drawWagon();
+        D.person(c, "hero", e.dir, cx, foot, T, phase, t);
+        if (e.dir === "down") drawWagon();
+        const b = this.bubble;
+        if (b && this.tick < b.until && c === this.ctx) this.speech(c, b.text, wx, wy - T * 1.25);
+        return;
+      }
       if (e === this.player && this.boating) {
         // sitting in the boat: draw the boat, then you, hidden below the sides
         const by = at.y * T + T * 0.62 - camY + Math.sin(t * 2.2) * T * 0.03;
@@ -1130,6 +1199,21 @@
         c.restore();
         this.ripples(hx, H * 0.66 - s * 0.35, s, t);
       } else D.person(c, "hero", "up", W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s, null, t);
+    },
+
+    /** A little speech bubble (little brother's chatter). */
+    speech(c, text, x, y) {
+      c.save();
+      c.font = `${Math.round(this.T * 0.36)}px "Patrick Hand", sans-serif`;
+      const w = c.measureText(text).width + this.T * 0.4, h = this.T * 0.55;
+      const bx = Math.max(6, Math.min(this.W - w - 6, x - w / 2)), by = y - h;
+      c.fillStyle = "#FFFDF7"; c.strokeStyle = "#3A3330"; c.lineWidth = 2;
+      c.beginPath(); c.roundRect(bx, by, w, h, h / 2); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(x - 5, by + h - 1); c.lineTo(x, by + h + 8); c.lineTo(x + 5, by + h - 1); c.fill();
+      c.beginPath(); c.moveTo(x - 5, by + h); c.lineTo(x, by + h + 8); c.lineTo(x + 5, by + h); c.stroke();
+      c.fillStyle = "#3A3330"; c.textBaseline = "middle"; c.textAlign = "center";
+      c.fillText(text, bx + w / 2, by + h / 2 + 1);
+      c.restore();
     },
 
     ripples(cx, y, s, t, c = this.ctx) {

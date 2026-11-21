@@ -42,6 +42,8 @@
     objects: {
       // "T": { src: "assets/adventure/tree.png", w: 1.6, h: 2.2 },
       // "bike": { src: "assets/adventure/bike.png", w: 1, h: 0.8 },   // the parked bike
+      // "wagon": { src: "assets/adventure/wagon.png", w: 1, h: 0.8 }, // the parked wagon
+      // "boat": { src: "assets/adventure/boat.png", w: 2, h: 1 },     // the boat (drawn facing right)
     },
   };
 
@@ -509,6 +511,7 @@
   const LOOKS = {
     hero: { shirt: "#E8604C", pants: "#3E5C8A", skin: "#F2C49B", hair: "#5A3A26", cap: "#2F7FC1", pack: "#F2B544" },
     friend: { shirt: "#7CC47F", pants: "#6B5B95", skin: "#C98E63", hair: "#2B1D14", bow: "#F28DA8" },
+    brother: { shirt: "#F3F1EA", pants: "#2F7A4F", skin: "#7A4A2E", hair: "#1C1310", braids: true },
     mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#E8B48A", hair: "#7A4B2A", long: true },
     elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#F0C8A8", hair: "#E8E4DC", glasses: true },
     uncle: { shirt: "#4F86B0", pants: "#6B5B4B", skin: "#E0AC85", hair: "#8B5A2B", hat: "#C9B27C", beard: true },
@@ -598,6 +601,7 @@
         c.beginPath(); c.ellipse(side ? cx - 1.2 * u : cx, hy + 2.2 * u, side ? 3 * u : 3.8 * u, 2.4 * u, 0, 0, Math.PI); c.closePath(); paint(c, L.hair, lw);
       }
       if (L.bow) { ellipse(c, cx + 3.4 * u, hy - 3.6 * u, 1.6 * u, 1.1 * u, 0.5); paint(c, L.bow, lw); }
+      if (L.braids) braids(c, L, cx, hy, u, lw, dir);
       // face
       const blink = Math.floor((t + cx * 0.01) * 10) % 37 === 0;
       const eyes = side ? [cx - 2.2 * u] : [cx - 1.7 * u, cx + 1.7 * u];
@@ -613,11 +617,28 @@
       c.beginPath(); c.arc(side ? cx - 2.6 * u : cx, hy + 1.8 * u, 1.2 * u, 0.15 * Math.PI, 0.85 * Math.PI); ink(c, lw * 0.9);
     } else if (L.cap) {
       c.beginPath(); c.ellipse(cx, hy - 1 * u, 4.6 * u, 3.4 * u, 0, Math.PI, Math.PI * 2); paint(c, L.cap, lw);
+    } else if (L.braids) {
+      braids(c, L, cx, hy, u, lw, dir);
     } else if (L.hat) {
       ellipse(c, cx, hy - 2.4 * u, 6.2 * u, 1.6 * u); paint(c, L.hat, lw);
       c.beginPath(); c.ellipse(cx, hy - 2.6 * u, 3.8 * u, 3 * u, 0, Math.PI, Math.PI * 2); c.closePath(); paint(c, L.hat, lw);
     }
     c.restore();
+  }
+
+  /** Cornrow braids running back over the head, gathered into a little puff. */
+  function braids(c, L, cx, hy, u, lw, dir) {
+    const side = dir === "left" || dir === "right";
+    if (dir === "up") { ellipse(c, cx, hy + 2.8 * u, 1.9 * u, 2 * u); paint(c, L.hair, lw); }
+    else if (side) { ellipse(c, cx + (dir === "left" ? 4.4 : -4.4) * u, hy + 0.6 * u, 1.7 * u, 1.9 * u); paint(c, L.hair, lw); }
+    c.strokeStyle = "rgba(255,255,255,.22)"; c.lineWidth = Math.max(1, lw * 0.55); c.lineCap = "round";
+    for (const k of [-2.2, -0.7, 0.8, 2.3]) {
+      c.beginPath();
+      if (dir === "up") { c.moveTo(cx + k * u, hy - 4 * u); c.quadraticCurveTo(cx + k * 1.15 * u, hy - 1 * u, cx + k * 0.5 * u, hy + 2.2 * u); }
+      else if (side) { c.moveTo(cx + (dir === "left" ? -2.5 : 2.5) * u, hy - 3.8 * u + k * 0.45 * u); c.quadraticCurveTo(cx, hy - 4.6 * u + k * 0.5 * u, cx + (dir === "left" ? 3.6 : -3.6) * u, hy - 1.6 * u + k * 0.5 * u); }
+      else { c.moveTo(cx + k * u, hy - 1.2 * u); c.quadraticCurveTo(cx + k * 1.1 * u, hy - 3.6 * u, cx + k * 0.8 * u, hy - 4.3 * u); }
+      c.stroke();
+    }
   }
 
   function personSheet(c, sheet, im, dir, cx, foot, s, phase) {
@@ -929,6 +950,61 @@
     c.restore();
   }
 
+  /* ---------- the wagon ---------- */
+  function wheel(c, x, y, r, spin, lw) {
+    ellipse(c, x, y, r, r); paint(c, "#2B2B30", lw);
+    ellipse(c, x, y, r * 0.62, r * 0.62); paint(c, "#F7F7F2", lw * 0.6);
+    c.strokeStyle = "#C9C9C2"; c.lineWidth = Math.max(1, lw * 0.6);
+    for (let i = 0; i < 3; i++) {
+      const a = spin + i * 2.094;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55); c.stroke();
+    }
+    ellipse(c, x, y, r * 0.17, r * 0.17); paint(c, "#D9433B");
+  }
+
+  /**
+   * A red wagon whose wheels rest on y = gy, centred on cx, facing dir.
+   * rider: draw little brother sitting inside. grip: [x, y] of the pusher's
+   * hands, so the handle reaches them.
+   */
+  function wagon(c, cx, gy, s, dir, t, phase, rider, grip) {
+    const pic = A.assets.objects.wagon;
+    const im = pic && !rider && img(pic.src);
+    if (im) { const w = (pic.w || 1) * s, hh = (pic.h || 0.8) * s; c.drawImage(im, cx - w / 2, gy - hh, w, hh); return; }
+    const lw = Math.max(1.4, s * 0.04);
+    const side = dir === "left" || dir === "right", k = dir === "left" ? -1 : 1;
+    const spin = (phase || 0) * Math.PI * 4 * k;
+    ellipse(c, cx, gy, side ? s * 0.5 : s * 0.38, s * 0.09); paint(c, "rgba(0,0,0,.16)");
+    const W = side ? s * 0.88 : s * 0.64;
+    const top = gy - s * 0.62, lip = gy - s * 0.42, bottom = gy - s * 0.14;
+    // wheels on the far side
+    if (side) { wheel(c, cx - s * 0.27, gy - s * 0.2, s * 0.1, spin, lw); wheel(c, cx + s * 0.27, gy - s * 0.2, s * 0.1, spin, lw); }
+    else { wheel(c, cx - W / 2 + s * 0.05, gy - s * 0.36, s * 0.085, spin, lw); wheel(c, cx + W / 2 - s * 0.05, gy - s * 0.36, s * 0.085, spin, lw); }
+    // the inside of the tub
+    c.beginPath(); c.roundRect(cx - W / 2, top, W, lip - top + s * 0.05, s * 0.07); paint(c, "#A42A26", lw);
+    c.fillStyle = "#6E6A72"; c.fillRect(cx - W / 2 + s * 0.06, top + s * 0.05, W - s * 0.12, s * 0.06);
+    // little brother, sitting in the wagon
+    if (rider) {
+      c.save(); c.beginPath(); c.rect(cx - s * 2, gy - s * 3, s * 4, s * 3 - (gy - lip) + s * 0.03); c.clip();
+      person(c, "brother", dir, cx + (side ? -k * s * 0.05 : 0), lip + s * 0.42, s * 0.82, null, t);
+      c.restore();
+    }
+    // the front panel
+    c.beginPath(); c.roundRect(cx - W / 2, lip, W, bottom - lip, s * 0.05); paint(c, "#DB3B33", lw);
+    c.fillStyle = "rgba(255,255,255,.28)"; c.fillRect(cx - W / 2 + s * 0.07, lip + s * 0.05, W - s * 0.14, s * 0.035);
+    // wheels on the near side
+    if (side) { wheel(c, cx - s * 0.27, gy - s * 0.1, s * 0.14, spin, lw); wheel(c, cx + s * 0.27, gy - s * 0.1, s * 0.14, spin, lw); }
+    else { wheel(c, cx - W / 2 + s * 0.03, gy - s * 0.09, s * 0.12, spin, lw); wheel(c, cx + W / 2 - s * 0.03, gy - s * 0.09, s * 0.12, spin, lw); }
+    // the handle, reaching back to whoever is pushing
+    if (grip) {
+      const ax = side ? cx - k * W / 2 : cx, ay = side ? lip : dir === "down" ? top + s * 0.05 : bottom;
+      c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo((ax + grip[0]) / 2, Math.min(ay, grip[1]) - s * 0.12, grip[0], grip[1]);
+      ink(c, s * 0.07, "#26262B");
+      ellipse(c, grip[0], grip[1], s * 0.07, s * 0.05); paint(c, "#26262B");
+    }
+  }
+  OBJECTS.wagon = (c, s) => wagon(c, s / 2, s * 0.92, s, "right", 0, 0, false, null);
+
   /** A solid silhouette of a critter (for ones you've met but not befriended). */
   function silhouette(id, w, hh, color) {
     const cv = document.createElement("canvas");
@@ -941,5 +1017,5 @@
     return cv;
   }
 
-  A.draw = { C, ground, object, person, critter, silhouette, water, boat, blob, rectPts, ellipsePts, rng, paint, line };
+  A.draw = { C, ground, object, person, critter, silhouette, water, boat, wagon, blob, rectPts, ellipsePts, rng, paint, line };
 })();
