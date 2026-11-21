@@ -252,6 +252,8 @@
       this.items = (this.map.items || []).filter((it) => it.kind !== "bike");
       if (this.bike && this.bike.map === id) this.items.push({ kind: "bike", x: this.bike.x, y: this.bike.y });
       this.grace = 2;
+      this.fx = [];
+      this.swimX = null;
       this.labelHouses();
     },
 
@@ -315,6 +317,7 @@
       else if (this.scene === "book") this.updateBook();
       else if (this.scene === "fishing") this.updateFishing();
       if (this.scene === "world") this.updatePeople();
+      this.updateFx();
       Input.pressed.clear();
     },
 
@@ -358,6 +361,7 @@
       p.fromX = p.x; p.fromY = p.y;
       p.x = nx; p.y = ny;
       p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime(nx, ny);
+      p.ease = this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim;
     },
 
     /** B: get off if riding, or get on if the bike is right here. */
@@ -409,6 +413,9 @@
         return true;
       }
       const here = this.tileAt(p.x, p.y);
+      const wasSwimming = this.tileAt(p.fromX, p.fromY).swim;
+      if (here.swim && !wasSwimming) { this.splash(p.x + 0.5, p.y + 0.56, 14, 1); tone(240, 0.18, "sine", 0.12); tone(520, 0.12, "sine", 0.06, 0.05); }
+      else if (!here.swim && wasSwimming) this.splash(p.x + 0.5, p.y + 0.5, 5, 0.4);
       const pool = here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
       if (pool) {
         if (this.grace > 0) this.grace--;
@@ -447,6 +454,143 @@
       if (item && item.kind === "bike") return this.getOn(item);
       const sign = (this.map.signs || []).find((s) => s.x === fx && s.y === fy);
       if (sign) this.say(sign.text);
+    },
+
+    /* ---------------- water physics: splashes, ripples, wakes ----------------
+       Particles live in tile units. Drops fly up and fall back with gravity
+       (z is their height above the water) and leave a small ripple where
+       they land. Rings spread out and fade. Wakes drift sideways and slow
+       down from the water's drag.                                          */
+    splash(x, y, n, power = 1) {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, sp = (0.01 + Math.random() * 0.025) * power;
+        this.fx.push({ kind: "drop", x, y, z: 0.12, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: (0.04 + Math.random() * 0.05) * power, age: 0 });
+      }
+      this.fx.push({ kind: "ring", x, y, size: 0.7 * power + 0.2, life: 55, age: 0 });
+    },
+    ring(x, y, size = 0.45, life = 45) { this.fx.push({ kind: "ring", x, y, size, life, age: 0 }); },
+
+    updateFx() {
+      const p = this.player;
+      if (this.scene === "world" && this.tileAt(Math.round(this.swimX ?? p.x), Math.round(this.swimY ?? p.y)).swim && this.swimX != null) {
+        // a swimmer pushes water: a wake while moving, slow rings while floating
+        if (p.moving && p.ease) {
+          const [dx, dy] = DIRS[p.dir];
+          if (this.tick % 7 === 0) {
+            for (const k of [-1, 1]) {
+              this.fx.push({ kind: "wake", x: this.swimX - dx * 0.25, y: this.swimY - dy * 0.15, vx: -dy * k * 0.02 - dx * 0.006, vy: dx * k * 0.014 - dy * 0.006, life: 42, age: 0 });
+            }
+          }
+          if (this.tick % 18 === 0) this.ring(this.swimX, this.swimY, 0.35, 38);
+        } else if (this.tick % 70 === 0) this.ring(this.swimX, this.swimY, 0.3, 50);
+      }
+      for (const f of this.fx) {
+        f.age++;
+        if (f.kind === "drop") {
+          f.x += f.vx; f.y += f.vy; f.z += f.vz; f.vz -= 0.0065;
+          if (f.z <= 0) { f.dead = true; this.ring(f.x, f.y, 0.14, 24); }
+        } else if (f.kind === "wake") {
+          f.x += f.vx; f.y += f.vy; f.vx *= 0.95; f.vy *= 0.95;
+          if (f.age > f.life) f.dead = true;
+        } else if (f.age > f.life) f.dead = true;
+      }
+      this.fx = this.fx.filter((f) => !f.dead);
+      if (this.fx.length > 220) this.fx.splice(0, this.fx.length - 220);
+    },
+
+    /** Ripples and wakes, drawn on the water's surface. */
+    drawSurfaceFx(c, camX, camY, waterPath) {
+      const T = this.T;
+      c.save(); c.clip(waterPath); c.lineCap = "round";
+      for (const f of this.fx) {
+        const x = f.x * T - camX, y = f.y * T - camY, k = f.age / f.life;
+        if (f.kind === "ring") {
+          const rx = f.size * T * (0.35 + k * 0.9);
+          c.strokeStyle = `rgba(255,255,255,${(1 - k) * 0.85})`; c.lineWidth = Math.max(1, T * 0.035 * (1 - k * 0.5));
+          c.beginPath(); c.ellipse(x, y, rx, rx * 0.32, 0, 0, Math.PI * 2); c.stroke();
+        } else if (f.kind === "wake") {
+          c.strokeStyle = `rgba(255,255,255,${(1 - k) * 0.7})`; c.lineWidth = Math.max(1, T * 0.03);
+          c.beginPath(); c.moveTo(x - T * 0.12, y); c.quadraticCurveTo(x, y - T * 0.05, x + T * 0.12, y); c.stroke();
+        }
+      }
+      c.restore();
+    },
+
+    /** Flying drops, drawn above everything. */
+    drawDrops(c, camX, camY) {
+      const T = this.T;
+      c.fillStyle = "rgba(255,255,255,.95)"; c.strokeStyle = "rgba(60,140,160,.6)"; c.lineWidth = 1;
+      for (const f of this.fx) {
+        if (f.kind !== "drop") continue;
+        const x = f.x * T - camX, y = (f.y - f.z) * T - camY, r = T * 0.04;
+        c.beginPath(); c.ellipse(x, y, r, r * 1.2, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+      }
+    },
+
+    /** The sky mirrored in the water: soft clouds drifting by and a sun glint. */
+    drawSky(c, waterPath, camX, camY, t) {
+      const T = this.T, mw = this.map.tiles[0].length + 8;
+      c.save(); c.clip(waterPath);
+      for (let i = 0; i < 6; i++) {
+        const x = ((((i * 13.7 + t * 0.12) % mw) + mw) % mw) - 4, y = (i * 9.1) % this.map.tiles.length;
+        const cx = x * T - camX, cy = y * T - camY;
+        for (const [ox, oy, rx, ry] of [[0, 0, 2.2, 0.7], [1.3, -0.25, 1.4, 0.55], [-1.2, 0.15, 1.3, 0.5]]) {
+          const g = c.createRadialGradient(cx + ox * T, cy + oy * T, 0, cx + ox * T, cy + oy * T, rx * T);
+          g.addColorStop(0, "rgba(255,255,255,.26)"); g.addColorStop(1, "rgba(255,255,255,0)");
+          c.fillStyle = g;
+          c.save(); c.translate(cx + ox * T, cy + oy * T); c.scale(1, ry / rx); c.translate(-(cx + ox * T), -(cy + oy * T));
+          c.fillRect(cx + ox * T - rx * T, cy + oy * T - rx * T, rx * T * 2, rx * T * 2);
+          c.restore();
+        }
+      }
+      // sun glint: a few bright flecks that twinkle in a fixed spot on screen
+      for (let i = 0; i < 9; i++) {
+        const a = Math.sin(t * 2.3 + i * 1.7);
+        if (a < 0.2) continue;
+        const gx = this.W * 0.72 + Math.sin(i * 2.1) * T * 1.2, gy = this.H * 0.28 + Math.cos(i * 1.3) * T * 0.8;
+        c.fillStyle = `rgba(255,255,240,${a * 0.85})`;
+        c.beginPath(); c.ellipse(gx, gy, T * 0.12 * a, T * 0.035, 0, 0, Math.PI * 2); c.fill();
+      }
+      c.restore();
+    },
+
+    /* ---------------- reflections ----------------
+       Anything standing at the water's edge or on the dock is drawn again,
+       upside down, into a buffer: mirrored at its base, tinted by the water,
+       faded with distance, then copied onto the water in thin strips that
+       sway with the ripples.                                              */
+    drawReflections(things, waterPath, t) {
+      if (!things.length) return;
+      const W = this.W, H = this.H, dpr = this.dpr, T = this.T, c = this.ctx;
+      const buf = (this.reflBuf = this.reflBuf || document.createElement("canvas"));
+      if (buf.width !== Math.round(W * dpr) || buf.height !== Math.round(H * dpr)) {
+        buf.width = Math.round(W * dpr); buf.height = Math.round(H * dpr);
+      }
+      const rc = buf.getContext("2d");
+      rc.setTransform(1, 0, 0, 1, 0, 0);
+      rc.clearRect(0, 0, buf.width, buf.height);
+      rc.setTransform(dpr, 0, 0, dpr, 0, 0);
+      let top = Infinity, bottom = -Infinity;
+      for (const th of things) {
+        const m = th.mirror, len = th.reach * T;
+        rc.save(); rc.translate(0, 2 * m); rc.scale(1, -1); th.draw(rc); rc.restore();
+        rc.save();
+        rc.globalCompositeOperation = "destination-out";
+        const g = rc.createLinearGradient(0, m, 0, m + len);
+        g.addColorStop(0, "rgba(0,0,0,.05)"); g.addColorStop(1, "rgba(0,0,0,1)");
+        rc.fillStyle = g; rc.fillRect(th.cx - T * 1.2, m, T * 2.4, len + T);
+        rc.restore();
+        top = Math.min(top, m); bottom = Math.max(bottom, m + len);
+      }
+      rc.save(); rc.globalCompositeOperation = "source-atop";
+      rc.fillStyle = "rgba(40,115,140,.4)"; rc.fillRect(0, 0, W, H); rc.restore();
+      c.save(); c.clip(waterPath); c.globalAlpha = 0.7;
+      const y0 = Math.max(0, Math.floor(top)), y1 = Math.min(H, Math.ceil(bottom));
+      for (let y = y0; y < y1; y += 2) {
+        const dx = Math.sin(y * 0.2 + t * 3.1) * 1.4 + Math.sin(y * 0.055 - t * 1.4) * 1.6;
+        c.drawImage(buf, 0, y * dpr, buf.width, 2 * dpr, dx, y, W, 2);
+      }
+      c.restore();
     },
 
     /* ---------------- fishing with Uncle Pat ---------------- */
@@ -730,7 +874,9 @@
       const t = this.tick / 60;
       const p = this.player;
       const pos = (e, dur) => {
-        const k = e.moving ? e.t / dur : 1;
+        let k = e.moving ? e.t / dur : 1;
+        if (e.moving && e.ease) k = (1 - Math.cos(Math.PI * k)) / 2; // swim strokes: push, glide, slow
+
         return { x: e.fromX + (e.x - e.fromX) * k, y: e.fromY + (e.y - e.fromY) * k };
       };
       const pp = pos(p, p.dur);
@@ -744,51 +890,96 @@
         return ch === "h" ? o === "h" : o === ch;
       };
 
-      // ground
-      const objects = [];
+      // ground. Water is painted afterwards as one layer, so it has no seams.
+      const isWet = (ch) => {
+        const g = TILES[ch]?.ground;
+        return (g === "water" || g === "dock") && !AD.assets.tiles[ch];
+      };
+      const objects = [], wet = [], docks = [];
+      const waterPath = new Path2D();
       for (let ty = y0; ty <= y1; ty++) {
         for (let tx = x0; tx <= x1; tx++) {
           const ch = this.charAt(tx, ty);
           const tile = TILES[ch];
           const sx = tx * T - camX, sy = ty * T - camY;
           const variant = AD.hash(tx, ty) % 4;
-          D.ground(c, tile.ground, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
+          if (isWet(ch)) {
+            waterPath.rect(sx, sy, T, T);
+            wet.push([tx, ty, sx, sy]);
+            if (tile.ground === "dock") docks.push([tx, ty, sx, sy, ch]);
+          } else {
+            D.ground(c, tile.ground, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
+          }
           if (tile.object) objects.push({ y: ty + 1, tx, ty, ch, tile, sx, sy, variant });
         }
       }
-
-      // things that stand up, and people, back to front
+      // things that stand up, and people
       const actors = [
         ...this.people.map((n) => ({ e: n, look: n.look, dur: NPC_STEP, at: pos(n, NPC_STEP) })),
         { e: p, look: this.riding ? "heroBike" : "hero", dur: p.dur, at: pp },
       ];
-      const items = [
-        ...objects.map((o) => ({ y: o.y, draw: () => {
+      const things = [
+        ...objects.map((o) => ({ y: o.y, tx: o.tx, ty: o.ty, cx: o.sx + T / 2, base: o.sy + T, onWet: isWet(o.ch), draw: (cc) => {
           const house = o.ch === "h" ? this.houseOf[o.ty]?.[o.tx] ?? 0 : 0;
           const info = { color: AD.hash(house, this.mapId.length) % AD.HOUSES.length, window: o.ch === "h" && AD.hash(o.tx, o.ty, 3) % 3 === 0 };
-          D.object(c, o.tile.object, o.ch, o.sx, o.sy, T, dpr, AD.maskOf(same(o.tx, o.ty, o.ch)), o.variant, info);
+          D.object(cc, o.tile.object, o.ch, o.sx, o.sy, T, dpr, AD.maskOf(same(o.tx, o.ty, o.ch)), o.variant, info);
         } })),
-        ...actors.map((a) => ({ y: a.at.y + 0.95, draw: () => this.drawActor(a, camX, camY, t) })),
-        ...this.items.map((it) => ({ y: it.y + 0.9, draw: () => {
-          D.object(c, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0);
-        } })),
+        ...actors.map((a) => ({ y: a.at.y + 0.95, tx: Math.round(a.at.x), ty: Math.round(a.at.y), actor: true,
+          cx: a.at.x * T + T / 2 - camX, base: a.at.y * T + T * 0.9 - camY, draw: (cc) => this.drawActor(a, camX, camY, t, cc) })),
+        ...this.items.map((it) => ({ y: it.y + 0.9, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.92 - camY,
+          draw: (cc) => D.object(cc, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0) })),
       ].sort((a, b) => a.y - b.y);
-      items.forEach((it) => it.draw());
+
+      const swimmer = this.tileAt(Math.round(pp.x), Math.round(pp.y)).swim;
+      this.swimX = swimmer && !this.riding ? pp.x + 0.5 : null;
+      this.swimY = pp.y + 0.56;
+
+      if (wet.length) {
+        D.water(c, dpr, waterPath, camX, camY, t);
+        this.drawSky(c, waterPath, camX, camY, t);
+        // reflections of anything at the water's edge or on the dock (not swimmers)
+        const mirrored = things.filter((th) => {
+          if (th.actor && this.tileAt(th.tx, th.ty).swim) return false;
+          return isWet(this.charAt(th.tx, th.ty)) || isWet(this.charAt(th.tx, th.ty + 1));
+        }).map((th) => ({ ...th, mirror: th.onWet ? th.base - T * 0.2 : th.base, reach: th.actor ? 2.4 : 2.2 }));
+        this.drawReflections(mirrored, waterPath, t);
+        // soft foam where the water meets the shore
+        c.lineCap = "round";
+        for (const [tx, ty, sx, sy] of wet) {
+          const edges = [[0, -1, sx, sy + 2, sx + T, sy + 2], [0, 1, sx, sy + T - 2, sx + T, sy + T - 2],
+            [-1, 0, sx + 2, sy, sx + 2, sy + T], [1, 0, sx + T - 2, sy, sx + T - 2, sy + T]];
+          for (const [dx, dy, x1, y1, x2, y2] of edges) {
+            if (isWet(this.charAt(tx + dx, ty + dy))) continue;
+            c.strokeStyle = "rgba(228,248,243,.95)"; c.lineWidth = T * 0.07;
+            c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+            const lap = (4 + Math.sin(t * 2 + tx + ty) * 2.5) * (T / 48);
+            c.strokeStyle = "rgba(228,248,243,.45)"; c.lineWidth = T * 0.035;
+            c.beginPath(); c.moveTo(x1 - dx * lap, y1 - dy * lap); c.lineTo(x2 - dx * lap, y2 - dy * lap); c.stroke();
+          }
+        }
+        for (const [tx, ty, sx, sy, ch] of docks) {
+          D.ground(c, "dockPlanks", ch + "p", sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), AD.hash(tx, ty) % 4);
+        }
+        this.drawSurfaceFx(c, camX, camY, waterPath);
+      }
+
+      things.forEach((it) => it.draw(c));
+      this.drawDrops(c, camX, camY);
     },
 
-    drawActor({ e, look, dur, at }, camX, camY, t) {
-      const c = this.ctx, T = this.T;
+    drawActor({ e, look, dur, at }, camX, camY, t, cc) {
+      const c = cc || this.ctx, T = this.T;
       const cx = at.x * T + T / 2 - camX;
       const foot = at.y * T + T * 0.9 - camY;
       const phase = e.moving ? (e.t / dur) * 0.5 + (e.leg ? 0.5 : 0) : null;
       const gx0 = Math.round(at.x), gy0 = Math.round(at.y);
       if (this.tileAt(gx0, gy0).swim && look !== "heroBike") {
         // swimming: only head and shoulders above the water
-        const waterY = foot - T * 0.34;
+        const waterY = foot - T * 0.3;
         c.save(); c.beginPath(); c.rect(cx - T, waterY - T * 2, T * 2, T * 2); c.clip();
-        D.person(c, look, e.dir, cx, foot + T * 0.32 + Math.sin(t * 3) * T * 0.03, T, null, t);
+        D.person(c, look, e.dir, cx, foot + T * 0.12 + Math.sin(t * 3) * T * 0.04, T * 1.1, null, t);
         c.restore();
-        this.ripples(cx, waterY, T, t + (phase || 0));
+        this.ripples(cx, waterY, T, t + (phase || 0), c);
         return;
       }
       D.person(c, look, e.dir, cx, foot, T, phase, t);
@@ -846,8 +1037,7 @@
       } else D.person(c, "hero", "up", W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s, null, t);
     },
 
-    ripples(cx, y, s, t) {
-      const c = this.ctx;
+    ripples(cx, y, s, t, c = this.ctx) {
       c.strokeStyle = "rgba(255,255,255,.8)"; c.lineWidth = Math.max(1.5, s * 0.04);
       c.beginPath(); c.ellipse(cx, y, s * 0.42, s * 0.1, 0, 0, Math.PI * 2); c.stroke();
       const k = (t * 0.8) % 1;
@@ -859,18 +1049,16 @@
     /** Water from height fraction top down to the bottom, with little waves. */
     drawWater(top, t) {
       const c = this.ctx, W = this.W, H = this.H;
+      const path = new Path2D();
+      path.moveTo(0, H * top);
+      for (let x = 0; x <= W; x += 10) path.lineTo(x, H * top + Math.sin(x * 0.05 + t * 2) * 3);
+      path.lineTo(W, H); path.lineTo(0, H); path.closePath();
+      D.water(c, this.dpr, path, 0, 0, t);
+      // a little deeper (darker) towards the bottom, lighter near the top
       const g = c.createLinearGradient(0, H * top, 0, H);
-      g.addColorStop(0, "#8ACFE8"); g.addColorStop(1, "#3F8FB8");
-      c.fillStyle = g;
-      c.beginPath(); c.moveTo(0, H * top);
-      for (let x = 0; x <= W; x += 10) c.lineTo(x, H * top + Math.sin(x * 0.05 + t * 2) * 3);
-      c.lineTo(W, H); c.lineTo(0, H); c.closePath(); c.fill();
-      c.strokeStyle = D.C.ink; c.lineWidth = 2.5; c.stroke();
-      c.strokeStyle = "rgba(255,255,255,.55)"; c.lineWidth = 2;
-      for (let i = 0; i < 10; i++) {
-        const x = ((i * 97 + t * 18) % (W + 60)) - 30, y = H * (top + 0.06 + ((i * 37) % 50) / 100);
-        c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 10, y - 4, x + 20, y); c.stroke();
-      }
+      g.addColorStop(0, "rgba(200,240,232,.25)"); g.addColorStop(1, "rgba(25,80,110,.3)");
+      c.fillStyle = g; c.fill(path);
+      c.strokeStyle = "rgba(228,248,243,.95)"; c.lineWidth = 3; c.stroke(path);
     },
 
     drawFishing() {

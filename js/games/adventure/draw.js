@@ -197,7 +197,7 @@
       }
     },
     water(c, s, r) {
-      c.fillStyle = C.water; c.fillRect(0, 0, s, s);
+      c.fillStyle = "#5FB2BC"; c.fillRect(0, 0, s, s);
       for (let i = 0; i < 2; i++) line(c, s * r(), s * (0.2 + r() * 0.6), s * r(), s * (0.2 + r() * 0.6), r, s * 0.05, s * 0.03, C.waterLite);
     },
     sand(c, s, r) {
@@ -206,6 +206,9 @@
     },
     dock(c, s, r, same) {
       GROUND.water(c, s, r);
+      GROUND.dockPlanks(c, s, r, same);
+    },
+    dockPlanks(c, s, r, same) {
       const m = s * 0.08;
       const x0 = same(-1, 0) ? 0 : m, x1 = same(1, 0) ? s : s - m;
       const y0 = same(0, -1) ? 0 : m, y1 = same(0, 1) ? s : s - m;
@@ -365,6 +368,94 @@
       });
     },
   };
+
+  /* ---------- water ----------
+     One painted texture that repeats seamlessly, shared by every water tile,
+     so the bay looks like one body of water instead of a grid of squares.
+     Teal base, soft light patches, long pointed streaks, white curls and
+     sparkles. A second layer with only the shine drifts the other way.    */
+  const WATER = { w: 640, h: 384 };
+  const waterCache = {};
+  function waterTextures(dpr) {
+    if (waterCache[dpr]) return waterCache[dpr];
+    const make = (paintIt) => {
+      const cv = document.createElement("canvas");
+      cv.width = WATER.w * dpr; cv.height = WATER.h * dpr;
+      const c = cv.getContext("2d");
+      c.scale(dpr, dpr);
+      paintIt(c);
+      return cv;
+    };
+    // draw a shape nine times so it wraps around every edge
+    const wrapped = (c, fn) => {
+      for (const dx of [-WATER.w, 0, WATER.w]) for (const dy of [-WATER.h, 0, WATER.h]) {
+        c.save(); c.translate(dx, dy); fn(); c.restore();
+      }
+    };
+    const lens = (c, x, y, rx, ry) => {
+      c.beginPath(); c.moveTo(x - rx, y);
+      c.quadraticCurveTo(x, y - ry, x + rx, y); c.quadraticCurveTo(x, y + ry, x - rx, y); c.closePath();
+    };
+    const base = make((c) => {
+      const r = rng(2024);
+      c.fillStyle = "#5FB2BC"; c.fillRect(0, 0, WATER.w, WATER.h);
+      for (let i = 0; i < 6; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, rad = 110 + r() * 170;
+        wrapped(c, () => {
+          const g = c.createRadialGradient(x, y, 0, x, y, rad);
+          g.addColorStop(0, "rgba(165,228,216,.55)"); g.addColorStop(1, "rgba(165,228,216,0)");
+          c.fillStyle = g; c.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+        });
+      }
+      const tones = ["rgba(58,136,162,.42)", "rgba(140,214,207,.45)", "rgba(72,152,173,.35)", "rgba(176,231,222,.38)", "rgba(48,121,150,.32)"];
+      for (let i = 0; i < 80; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, rx = 40 + r() * 230, ry = 2.5 + r() * 8, col = tones[i % tones.length];
+        wrapped(c, () => { lens(c, x, y, rx, ry); c.fillStyle = col; c.fill(); });
+      }
+    });
+    const shine = make((c) => {
+      const r = rng(77);
+      c.strokeStyle = "rgba(255,255,255,.8)"; c.lineCap = "round"; c.lineWidth = 1.6;
+      for (let i = 0; i < 16; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, len = 40 + r() * 120, amp = 2 + r() * 4, waves = 1 + Math.floor(r() * 3);
+        wrapped(c, () => {
+          c.beginPath();
+          for (let k = 0; k <= 24; k++) {
+            const px = x + (k / 24) * len, py = y + Math.sin((k / 24) * Math.PI * 2 * waves) * amp * (1 - k / 48);
+            if (k) c.lineTo(px, py); else c.moveTo(px, py);
+          }
+          c.stroke();
+        });
+      }
+      for (let i = 0; i < 6; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, rad = 6 + r() * 6;
+        wrapped(c, () => { c.beginPath(); c.arc(x, y, rad, Math.PI * 0.55, Math.PI * 1.45); c.stroke(); });
+      }
+      c.fillStyle = "rgba(255,255,255,.85)";
+      for (let i = 0; i < 22; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, w = 2 + r() * 3;
+        wrapped(c, () => { c.beginPath(); c.ellipse(x, y, w, w * 0.4, 0, 0, Math.PI * 2); c.fill(); });
+      }
+    });
+    return (waterCache[dpr] = { base, shine });
+  }
+
+  /**
+   * Paint water inside a path. (ox, oy) is the world position of the
+   * screen's top-left, so the texture lines up across every tile.
+   */
+  function water(c, dpr, path, ox, oy, t) {
+    const tex = waterTextures(dpr);
+    const at = (dx, dy) => new DOMMatrix().translate(dx, dy).scale(1 / dpr);
+    const base = c.createPattern(tex.base, "repeat");
+    base.setTransform(at(-ox + t * 5, -oy));
+    c.fillStyle = base; c.fill(path);
+    const shine = c.createPattern(tex.shine, "repeat");
+    shine.setTransform(at(-ox - t * 7, -oy + Math.sin(t * 0.6) * 3));
+    c.globalAlpha = 0.6 + Math.sin(t * 1.4) * 0.25;
+    c.fillStyle = shine; c.fill(path);
+    c.globalAlpha = 1;
+  }
 
   /* ---------- caches: each tile look is drawn once per size ---------- */
   const cache = new Map();
@@ -807,5 +898,5 @@
     return cv;
   }
 
-  A.draw = { C, ground, object, person, critter, silhouette, blob, rectPts, ellipsePts, rng, paint, line };
+  A.draw = { C, ground, object, person, critter, silhouette, water, blob, rectPts, ellipsePts, rng, paint, line };
 })();
