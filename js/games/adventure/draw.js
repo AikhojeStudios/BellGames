@@ -23,6 +23,7 @@
     people: {
       // hero: { src: "assets/adventure/hero.png", frameW: 128, frameH: 160,
       //         rows: { down: 0, up: 1, left: 2 }, walk: [1, 0, 2, 0] },
+      // heroBike: the hero riding the bike, same layout as hero.
     },
     // Critters: the main picture, plus optional eyes-closed and happy versions.
     // The game adds the bobbing, blinking, hopping and shaking.
@@ -40,6 +41,7 @@
     // w and h are in tiles; the bottom of the picture sits on the tile.
     objects: {
       // "T": { src: "assets/adventure/tree.png", w: 1.6, h: 2.2 },
+      // "bike": { src: "assets/adventure/bike.png", w: 1, h: 0.8 },   // the parked bike
     },
   };
 
@@ -388,6 +390,24 @@
    * s the tile size, phase 0–1 through a step (or null when standing).
    */
   function person(c, look, dir, cx, foot, s, phase, t) {
+    if (look === "heroBike" && !(A.assets.people.heroBike && img(A.assets.people.heroBike.src))) {
+      // no riding drawing yet: draw the bike and the hero sitting on it
+      const spin = (phase || 0) * Math.PI * 2;
+      const lift = s * 0.14;
+      ellipse(c, cx, foot, s * 0.42, s * 0.08); paint(c, "rgba(0,0,0,.16)");
+      if (dir === "left" || dir === "right") {
+        bikeSide(c, cx, foot, s, dir === "left" ? -spin : spin);
+        person(c, "hero", dir, cx - (dir === "left" ? -1 : 1) * s * 0.04, foot - lift, s, phase, t);
+      } else if (dir === "up") {
+        bikeEnd(c, cx, foot, s, false);
+        person(c, "hero", dir, cx, foot - lift, s, phase, t);
+        bikeEnd(c, cx, foot - s * 0.05, s * 0.9, true);
+      } else {
+        person(c, "hero", dir, cx, foot - lift, s, phase, t);
+        bikeEnd(c, cx, foot, s, true);
+      }
+      return;
+    }
     const sheet = A.assets.people[look];
     const im = sheet && img(sheet.src);
     if (im) return personSheet(c, sheet, im, dir, cx, foot, s, phase);
@@ -541,6 +561,29 @@
         c.fillStyle = C.ink;
         c.fillText("z", cx + 10 * u, base - 18 * u - (t % 2) * 3 * u);
       }
+    } else if (SNAKES[id]) {
+      snake(c, SNAKES[id], cx, base, u, lw, t, blink);
+    } else if (id === "squeaks") {
+      const twitch = Math.sin(t * 14) * 0.4 * u * (Math.sin(t * 1.3) > 0.6 ? 1 : 0);
+      c.beginPath(); c.moveTo(cx + 8 * u, base - 3 * u);
+      c.bezierCurveTo(cx + 16 * u, base - 2 * u, cx + 15 * u, base - 12 * u + Math.sin(t * 3) * 2 * u, cx + 11 * u, base - 11 * u);
+      ink(c, lw * 1.2, "#D99A9A");
+      ellipse(c, cx + 1 * u, base - 7 * u - breathe / 2, 10 * u, 7 * u + breathe / 2); paint(c, "#B8A699", lw);
+      ellipse(c, cx + 2 * u, base - 5 * u, 6 * u, 3.5 * u); paint(c, "#D9CCC0");
+      [-1, 1].forEach((k) => {
+        ellipse(c, cx - 4 * u + k * 5 * u, base - 18 * u - breathe, 4.6 * u, 4.6 * u); paint(c, "#B8A699", lw);
+        ellipse(c, cx - 4 * u + k * 5 * u, base - 18 * u - breathe, 2.8 * u, 2.8 * u); paint(c, "#F2B8C0");
+      });
+      ellipse(c, cx - 4 * u, base - 11 * u - breathe, 7 * u, 6 * u); paint(c, "#B8A699", lw);
+      eyes(base - 12 * u - breathe, 2.6 * u, 1.3 * u);
+      ellipse(c, cx - 4 * u + twitch, base - 8.6 * u - breathe, 1.2 * u, 0.9 * u); paint(c, "#E8798F");
+      [-1, 1].forEach((k) => {
+        [-0.6, 0.6].forEach((a) => {
+          c.beginPath(); c.moveTo(cx - 4 * u + k * 2 * u, base - 8.4 * u - breathe);
+          c.lineTo(cx - 4 * u + k * 7 * u, base - 8.4 * u - breathe + a * 2 * u + twitch); ink(c, lw * 0.6);
+        });
+      });
+      [-1, 1].forEach((k) => { ellipse(c, cx - 1 * u + k * 4 * u, base - 0.8 * u, 2.4 * u, 1.2 * u); paint(c, "#F2B8C0", lw * 0.8); });
     } else if (id === "flitter") {
       const hover = -5 * u + Math.sin(t * 3) * 1.6 * u;
       const flap = 0.7 + 0.3 * Math.abs(Math.sin(t * 7));
@@ -558,6 +601,81 @@
         c.beginPath(); c.moveTo(cx + k * 1.2 * u, by - 8 * u); c.quadraticCurveTo(cx + k * 3 * u, by - 13 * u, cx + k * 5 * u, by - 12.5 * u); ink(c, lw * 0.8);
       });
       eyes(by - 5.8 * u, 1.6 * u, 1 * u);
+    }
+  }
+
+  /* Snakes share one drawing with different colours and poses. */
+  const SNAKES = {
+    sootsnake: { body: "#2C2C33", edge: "#101014", belly: "#F1EEE4", mark: "#4A4A55", lift: 20 },
+    sprigsnake: { body: "#7CC35A", edge: "#3F7F2E", belly: "#E9F18E", mark: "#93D46F", lift: 18 },
+    hoodini: { body: "#C9A35E", edge: "#7A5C2C", belly: "#F3DFAE", mark: "#A9803F", lift: 27, hood: true },
+  };
+  function snake(c, S, cx, base, u, lw, t, blink) {
+    const sway = Math.sin(t * (S.hood ? 1.6 : 2.2)) * (S.hood ? 2.6 : 1.4) * u;
+    const thick = (w, color, draw) => { draw(); c.lineWidth = w; c.strokeStyle = color; c.lineCap = c.lineJoin = "round"; c.stroke(); };
+    const tube = (draw, w) => { thick(w + lw * 2, S.edge, draw); thick(w, S.body, draw); };
+    // coils on the ground
+    tube(() => { c.beginPath(); c.ellipse(cx, base - 3.5 * u, 11 * u, 3.6 * u, 0, 0, Math.PI * 2); }, 5 * u);
+    tube(() => { c.beginPath(); c.ellipse(cx - 1 * u, base - 7.5 * u, 8 * u, 2.8 * u, 0, Math.PI * 0.1, Math.PI * 1.9); }, 4.6 * u);
+    [-7, -1, 6].forEach((x) => { ellipse(c, cx + x * u, base - 1.4 * u, 1.6 * u, 0.8 * u); paint(c, S.mark); });
+    // neck rising to the head
+    const hx = cx - 2 * u + sway, hy = base - S.lift * u;
+    const neck = () => { c.beginPath(); c.moveTo(cx + 6 * u, base - 8 * u); c.bezierCurveTo(cx + 9 * u, base - (S.lift * 0.6) * u, hx + 4 * u, hy + 6 * u, hx, hy + 2 * u); };
+    tube(neck, 4.2 * u);
+    thick(1.6 * u, S.belly, () => { c.beginPath(); c.moveTo(cx + 5.6 * u, base - 9 * u); c.bezierCurveTo(cx + 8 * u, base - (S.lift * 0.6) * u, hx + 3 * u, hy + 6 * u, hx - 0.6 * u, hy + 3 * u); });
+    if (S.hood) {
+      ellipse(c, hx, hy + 2 * u, 7.5 * u, 8 * u); paint(c, S.body, lw);
+      ellipse(c, hx, hy + 3 * u, 4.6 * u, 5.4 * u); paint(c, S.belly);
+      [-1, 1].forEach((k) => { ellipse(c, hx + k * 2.2 * u, hy + 1.6 * u, 1.3 * u, 1.3 * u); ink(c, lw * 0.8, S.edge); });
+    }
+    // tongue flick
+    if (Math.sin(t * 3) > 0.7) {
+      c.beginPath(); c.moveTo(hx, hy + 2.6 * u); c.lineTo(hx, hy + 5.5 * u);
+      c.moveTo(hx, hy + 5.5 * u); c.lineTo(hx - 1 * u, hy + 7 * u); c.moveTo(hx, hy + 5.5 * u); c.lineTo(hx + 1 * u, hy + 7 * u);
+      ink(c, lw * 0.8, "#D9434A");
+    }
+    ellipse(c, hx, hy, 4.6 * u, 3.6 * u); paint(c, S.body, lw);
+    ellipse(c, hx, hy + 1.6 * u, 2.6 * u, 1.4 * u); paint(c, S.belly);
+    [-1, 1].forEach((k) => {
+      const ex = hx + k * 2 * u, ey = hy - 0.6 * u;
+      if (blink) { c.beginPath(); c.moveTo(ex - 0.8 * u, ey); c.lineTo(ex + 0.8 * u, ey); ink(c, lw, "#fff"); }
+      else { ellipse(c, ex, ey, 1.1 * u, 1.2 * u); paint(c, "#fff"); ellipse(c, ex, ey + 0.2 * u, 0.6 * u, 0.8 * u); paint(c, C.ink); }
+    });
+  }
+
+  /* ---------- the bike ---------- */
+  /** A side-view bike with its wheels touching y = ground. */
+  function bikeSide(c, cx, ground, s, spin) {
+    const r = s * 0.19, lw = Math.max(1.4, s * 0.04);
+    [-1, 1].forEach((k) => {
+      const wx = cx + k * s * 0.3, wy = ground - r;
+      ellipse(c, wx, wy, r, r); paint(c, "rgba(255,255,255,.35)", lw * 1.4);
+      for (let i = 0; i < 3; i++) {
+        const a = spin + (i * Math.PI) / 3;
+        c.beginPath(); c.moveTo(wx - Math.cos(a) * r, wy - Math.sin(a) * r); c.lineTo(wx + Math.cos(a) * r, wy + Math.sin(a) * r);
+        ink(c, lw * 0.4, "#6E6B76");
+      }
+    });
+    const bx = cx - s * 0.3, fx = cx + s * 0.3, wy = ground - r;
+    c.beginPath();
+    c.moveTo(bx, wy); c.lineTo(cx - s * 0.02, wy); c.lineTo(cx - s * 0.1, wy - s * 0.3); c.lineTo(bx, wy);
+    c.moveTo(cx - s * 0.02, wy); c.lineTo(cx + s * 0.2, wy - s * 0.27); c.lineTo(cx - s * 0.1, wy - s * 0.3);
+    c.moveTo(fx, wy); c.lineTo(cx + s * 0.2, wy - s * 0.36);
+    ink(c, lw * 1.3, "#D9433B");
+    c.beginPath(); c.moveTo(cx + s * 0.14, wy - s * 0.4); c.lineTo(cx + s * 0.27, wy - s * 0.36); ink(c, lw * 1.2);
+    ellipse(c, cx - s * 0.12, wy - s * 0.33, s * 0.09, s * 0.03); paint(c, C.ink);
+  }
+  OBJECTS.bike = (c, s) => {
+    ellipse(c, s / 2, s * 0.92, s * 0.42, s * 0.07); paint(c, "rgba(0,0,0,.15)");
+    bikeSide(c, s / 2, s * 0.92, s, 0.3);
+  };
+  /** A front/back-view wheel and handlebars, for riding up or down. */
+  function bikeEnd(c, cx, ground, s, front) {
+    const lw = Math.max(1.4, s * 0.04);
+    c.beginPath(); c.roundRect(cx - s * 0.05, ground - s * 0.38, s * 0.1, s * 0.38, s * 0.05); paint(c, "#4A4650", lw);
+    if (front) {
+      c.beginPath(); c.moveTo(cx - s * 0.26, ground - s * 0.62); c.lineTo(cx + s * 0.26, ground - s * 0.62); ink(c, lw * 1.4);
+      c.beginPath(); c.moveTo(cx, ground - s * 0.62); c.lineTo(cx, ground - s * 0.36); ink(c, lw * 1.3, "#D9433B");
     }
   }
 

@@ -45,6 +45,10 @@
     mossy: { name: "MOSSY", art: "mossy", about: "A soft green blob. A sprout grows on its head." },
     pebblet: { name: "PEBBLET", art: "pebblet", about: "A sleepy little rock. It naps in the sun." },
     flitter: { name: "FLITTER", art: "flitter", about: "A dusty moth. It loves bright lights." },
+    squeaks: { name: "SQUEAKS", art: "squeaks", about: "A quick little mouse. It counts every seed it finds." },
+    sprigsnake: { name: "SPRIGSNAKE", art: "sprigsnake", about: "A bright green snake. It hides in the grass and is very shy." },
+    sootsnake: { name: "SOOTSNAKE", art: "sootsnake", about: "A shiny black snake. A great climber that naps up in trees." },
+    hoodini: { name: "HOODINI", art: "hoodini", about: "A cobra that puffs out its hood to look big. Very rare!" },
   };
 
   /* ---------- maps ---------- */
@@ -52,6 +56,7 @@
     home: {
       name: "Home",
       border: "X",
+      indoors: true,
       tiles: [
         "HHHHHHHH",
         "IIIIIIII",
@@ -67,7 +72,7 @@
         { x: 5, y: 3, look: "mom", dir: "down", talk: [
           "MOM: Going on an adventure? How exciting!",
           "Critters hide in the tall grass in everyone's yards. Answer their questions to make friends.",
-          "Be home for dinner!",
+          "Your bike is out front by the driveway. Be home for dinner!",
         ] },
       ],
     },
@@ -75,6 +80,7 @@
     rowan: {
       name: "Rowan's House",
       border: "X",
+      indoors: true,
       tiles: [
         "HHHHHHHH",
         "IIIIIIII",
@@ -132,7 +138,16 @@
           "Critters get bored if you guess wrong. Take your time and think!",
         ] },
       ],
-      critters: ["fizzbun", "fizzbun", "mossy", "mossy", "pebblet", "pebblet", "flitter"],
+      // things you can pick up
+      items: [{ x: 4, y: 6, kind: "bike" }],
+      // more copies of a name = met more often
+      critters: [
+        "squeaks", "squeaks", "squeaks",
+        "fizzbun", "fizzbun", "mossy", "mossy",
+        "sprigsnake", "sprigsnake", "sootsnake", "sootsnake",
+        "pebblet", "flitter",
+        "hoodini",
+      ],
     },
   };
 

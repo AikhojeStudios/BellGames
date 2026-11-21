@@ -16,6 +16,7 @@
   const { TILES, CRITTERS, MAPS, START, makeQuestion } = AD.world;
 
   const STEP = 14;            // frames to walk one tile
+  const BIKE_STEP = 8;        // frames to ride one tile
   const NPC_STEP = 22;        // people stroll a bit slower
   const LINE = 30;            // characters per line of talking
   const LINES = 3;            // lines per page of talking
@@ -116,7 +117,7 @@
       this.stage = h("div", { class: "advstage" },
         this.canvas, this.hud,
         this.stick,
-        button("b", "B: back", "B"),
+        button("b", "B: back, or hop on and off your bike", "B"),
         button("a", "A: talk or choose", "A"),
         button("start", "Menu", "☰"),
         this.talk, this.menuEl, this.bookEl);
@@ -168,6 +169,8 @@
       const save = App.Store.get("adventure", null);
       this.friends = new Set(save?.friends || []);
       this.seen = new Set(save?.seen || []);
+      this.hasBike = !!save?.hasBike;
+      this.riding = false;
       const at = save && MAPS[save.map] ? save : START;
       this.loadMap(at.map, at.x, at.y, at.dir);
       this.scene = "world";
@@ -198,7 +201,7 @@
       if (!this.player) return;
       App.Store.set("adventure", {
         map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir,
-        friends: [...this.friends], seen: [...this.seen],
+        friends: [...this.friends], seen: [...this.seen], hasBike: this.hasBike,
       });
     },
 
@@ -223,10 +226,12 @@
     loadMap(id, x, y, dir) {
       this.mapId = id;
       this.map = MAPS[id];
-      this.player = { x, y, fromX: x, fromY: y, dir, moving: false, t: 0, leg: 0, turn: 0, chain: false, bumpWait: 0 };
+      this.player = { x, y, fromX: x, fromY: y, dir, moving: false, t: 0, dur: STEP, leg: 0, turn: 0, chain: false, bumpWait: 0 };
       this.people = (this.map.people || []).map((p) => ({
         ...p, home: { x: p.x, y: p.y }, fromX: p.x, fromY: p.y, moving: false, t: 0, wait: randInt(60, 200),
       }));
+      this.items = (this.map.items || []).filter((it) => !(it.kind === "bike" && this.hasBike));
+      if (this.map.indoors) this.riding = false;
       this.grace = 2;
       this.labelHouses();
     },
@@ -252,11 +257,14 @@
     charAt(x, y) { return this.map.tiles[y]?.[x] ?? this.map.border; },
     tileAt(x, y) { return TILES[this.charAt(x, y)] || TILES[this.map.border]; },
     personAt(x, y) { return this.people.find((p) => p.x === x && p.y === y); },
+    itemAt(x, y) { return this.items.find((it) => it.x === x && it.y === y); },
+    stepTime() { return this.riding ? BIKE_STEP : STEP; },
 
     blocked(x, y, who) {
       if (y < 0 || y >= this.map.tiles.length || x < 0 || x >= this.map.tiles[0].length) return true;
       if (this.tileAt(x, y).solid) return true;
       if (this.people.some((p) => p !== who && p.x === x && p.y === y)) return true;
+      if (this.itemAt(x, y)) return true;
       const pl = this.player;
       return who !== pl && pl.x === x && pl.y === y;
     },
@@ -299,7 +307,7 @@
       const p = this.player;
       if (p.moving) {
         p.t++;
-        if (p.t < STEP) return;
+        if (p.t < p.dur) return;
         p.moving = false;
         p.chain = true;
         if (this.arrive()) return;
@@ -307,6 +315,7 @@
       if (p.bumpWait > 0) p.bumpWait--;
       if (Input.take("start")) return this.openStartMenu();
       if (Input.take("a")) return this.interact();
+      if (Input.take("b")) return this.toggleBike();
 
       const d = Input.dir();
       if (!d) { p.chain = false; p.turn = 0; return; }
@@ -323,7 +332,15 @@
       }
       p.fromX = p.x; p.fromY = p.y;
       p.x = nx; p.y = ny;
-      p.moving = true; p.t = 0; p.leg ^= 1;
+      p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime();
+    },
+
+    toggleBike() {
+      if (!this.hasBike) return;
+      if (this.map.indoors) return this.say(["No bikes in the house!"]);
+      this.riding = !this.riding;
+      if (this.riding) { tone(660, 0.06, "triangle", 0.1); tone(990, 0.08, "triangle", 0.1, 0.06); }
+      else tone(440, 0.08, "triangle", 0.1);
     },
 
     /** Called when the player finishes a step. Returns true if a door or critter took over. */
@@ -366,6 +383,14 @@
       if (person) {
         if (!person.moving) person.dir = OPPOSITE[p.dir];
         return this.say(person.talk);
+      }
+      const item = this.itemAt(fx, fy);
+      if (item && item.kind === "bike") {
+        this.items = this.items.filter((it) => it !== item);
+        this.hasBike = true;
+        this.save();
+        App.Sound.win();
+        return this.say(["It's your bike!", "Press B to hop on and off. Bikes go twice as fast!"], () => { this.riding = true; });
       }
       const sign = (this.map.signs || []).find((s) => s.x === fx && s.y === fy);
       if (sign) this.say(sign.text);
@@ -552,7 +577,7 @@
         const k = e.moving ? e.t / dur : 1;
         return { x: e.fromX + (e.x - e.fromX) * k, y: e.fromY + (e.y - e.fromY) * k };
       };
-      const pp = pos(p, STEP);
+      const pp = pos(p, p.dur);
       const camX = Math.round(pp.x * T + T / 2 - W / 2);
       const camY = Math.round(pp.y * T + T / 2 - H * 0.46);
       const x0 = Math.floor(camX / T) - 1, x1 = Math.ceil((camX + W) / T) + 1;
@@ -579,7 +604,7 @@
       // things that stand up, and people, back to front
       const actors = [
         ...this.people.map((n) => ({ e: n, look: n.look, dur: NPC_STEP, at: pos(n, NPC_STEP) })),
-        { e: p, look: "hero", dur: STEP, at: pp },
+        { e: p, look: this.riding ? "heroBike" : "hero", dur: p.dur, at: pp },
       ];
       const items = [
         ...objects.map((o) => ({ y: o.y, draw: () => {
@@ -588,6 +613,9 @@
           D.object(c, o.tile.object, o.ch, o.sx, o.sy, T, dpr, AD.maskOf(same(o.tx, o.ty, o.ch)), o.variant, info);
         } })),
         ...actors.map((a) => ({ y: a.at.y + 0.95, draw: () => this.drawActor(a, camX, camY, t) })),
+        ...this.items.map((it) => ({ y: it.y + 1, draw: () => {
+          D.object(c, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0);
+        } })),
       ].sort((a, b) => a.y - b.y);
       items.forEach((it) => it.draw());
     },
@@ -600,7 +628,7 @@
       D.person(c, look, e.dir, cx, foot, T, phase, t);
       // tall grass hides your feet
       const gx = Math.round(at.x), gy = Math.round(at.y);
-      if (this.tileAt(gx, gy).grass) {
+      if (this.tileAt(gx, gy).grass && look !== "heroBike") {
         const sx = gx * T - camX, sy = gy * T - camY;
         c.save();
         c.beginPath(); c.rect(sx - T * 0.2, sy + T * 0.62, T * 1.4, T * 0.5); c.clip();
