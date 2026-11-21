@@ -76,7 +76,7 @@
         "________",
         "___M____",
       ],
-      warps: [{ x: 3, y: 7, to: "crescent", tx: 14, ty: 15, dir: "down" }],
+      warps: [{ x: 3, y: 7, to: "crescent", tx: 0, ty: 0, dir: "down" }], // set by buildCrescent
       people: [
         { x: 5, y: 3, look: "mom", dir: "down", talk: [
           "MOM: Going on an adventure? How exciting!",
@@ -100,7 +100,7 @@
         "_rr_____",
         "____M___",
       ],
-      warps: [{ x: 4, y: 7, to: "crescent", tx: 17, ty: 17, dir: "down" }],
+      warps: [{ x: 4, y: 7, to: "crescent", tx: 0, ty: 0, dir: "up" }], // set by buildCrescent
       people: [
         { x: 5, y: 3, look: "elder", dir: "down", talk: [
           "GRAM: There's my favorite explorer! Come give Gram a hug.",
@@ -110,79 +110,62 @@
       ],
     },
 
-    // Home base. Street layout traced from OpenStreetMap (© OpenStreetMap contributors).
-    // Houses are placed on typical lots along each street.
-    crescent: {
+    // Home base: built from the real street layout (see buildCrescent below).
+    crescent: null,
+  };
+
+  /* ---------- Crescent Drive ----------
+     The tiles come from js/games/adventure/crescent-map.js, made by
+     tools/osm_to_map.py from an OpenStreetMap export: Crescent Drive runs
+     straight across the middle, with the real cross streets, the creek and
+     Forbes Bay where they really are relative to it. Houses are placed on
+     lots. Here we add the story: our house, Gram's, people, signs, the bike
+     and Uncle Pat's dock.                                                   */
+  function buildCrescent() {
+    const G = A.crescentMap;
+    const sp = G.special;
+    const street = G.street;
+    const signs = [
+      { x: sp.ours.mailbox[0], y: sp.ours.mailbox[1], text: ["OUR HOUSE"] },
+      { x: sp.grams.mailbox[0], y: sp.grams.mailbox[1], text: ["GRAM'S HOUSE", "Visitors always welcome. Cookies sometimes."] },
+    ];
+    const extra = {
+      "Crescent Drive": "Home sweet home!",
+      "Parkview Drive": "Forbes Bay is just past the end of Crescent Drive.",
+      "Rivershore Road": "Uncle Pat's dock is out on the bay.",
+      "Brothers Drive": "The creek runs behind here. Snakes love it!",
+    };
+    for (const [name, [x, y]] of Object.entries(G.signs)) {
+      signs.push({ x, y, text: [name.toUpperCase()].concat(extra[name] ? [extra[name]] : []) });
+    }
+    if (sp.dock.sign) signs.push({ x: sp.dock.sign[0], y: sp.dock.sign[1], text: ["FORBES BAY DOCK", "Uncle Pat's boat is tied up at the end."] });
+    MAPS.home.warps[0].tx = sp.ours.land[0]; MAPS.home.warps[0].ty = sp.ours.land[1];
+    MAPS.grams.warps[0].tx = sp.grams.land[0]; MAPS.grams.warps[0].ty = sp.grams.land[1];
+    const ox = sp.ours.door[0];
+    return {
       name: "Crescent Drive",
       border: "T",
-      tiles: [
-        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
-        "========================================",
-        "========================================",
-        "::==:::::::::::==:::::::==:~~~~~~~~~~~~~",
-        ",,==S,,,,,,,,,S==,,,,,,S==-~~~~~~~~~~~~~",
-        ",,==Dhhh,,,hhhD==Dhhh,,,==-~~~~~~~~~~~~~",
-        ",,==dhhh,T,hhhd==dhhh,T,==-~~~~~~~~~~~~~",
-        ",,==,,,,,,,,,,,==,,,,,,,==S~~~~~~##~~~~~",
-        ",,==Dhhh,,,hhhD==Dhhh,,,==-########O~~~~",
-        ",,==dhhh,*,hhhd==dhhh,,,==-~~~~~~##~~~~~",
-        ",,==,,,,,,,,,,,===========-~~~~~~~~~~~~~",
-        ",,==Dhhh,,,hhhD===========-~~~~~~~~~~~~~",
-        ",,==dhhh,T,hhhd==S,,,,,,==-~~~~~~~~~~~~~",
-        ",,==,,,,,,,,,,S==DhhhT,,==-~~~~~~~~~~~~~",
-        ",,==Dhhh,,,hhhD==dhhh,,,==-~~~~~~~~~~~~~",
-        ",,==dhhh,,,hhhd==S,,,,T,==-~~~~~~~~~~~~~",
-        ",,==,,,,,,,,,,,==Dhhh,,,==-~~~~~~~~~~~~~",
-        ",,==Dhhh,*,hhhD==dhhh,,,==-~~~~~~~~~~~~~",
-        ",,==dhhh,,,hhhd==,,,,T,,==-~~~~~~~~~~~~~",
-        ",,==,,,,,,,,,,,==,,,,,,,==-~~~~~~~~~~~~~",
-        ",,==DhhhT,,hhhD==,,,,,,,==,,~~,,,,,,,,,,",
-        ",,==dhhh,,,hhhd===========,,~~,,,,,,,,,,",
-        ",,==,,,,,,,,,,,===========,,~~,,,,,,,,T,",
-        ",,==Dhhh,,,hhhD==S,,,,,D,d,,~~,,T,,,,,,,",
-        ",,==dhhh,*,hhhd==Dhhh,hhh,,~~,,,,,,,,,,,",
-        ",,==,,,,,,,,,,,==dhhh,hhh,,~~,,,,,,,,,,,",
-        ",,==Dhhh,,,hhhD==,,,,,,,,,,~~,,,,,,,,,,,",
-        ",,==dhhh,,Thhhd==Dhhh,,,,,,~~,,,,,,,T,,,",
-        ",,==,,,,,,,,,,,==dhhh,,T,,,,~~,,,,,,,,,,",
-        ",,==Dhhh,,,hhhD==,,,,,,,,,,,~~,,,,,,,,,,",
-        ",,==dhhh,,,hhhd==Dhhh,,,,,,,~~,,,,,*,,,,",
-        ",,==,,,,,,,,,,,==dhhh,,,,,,,~~,,,,,,,,,,",
-        ",,===============,,,,,,,,,,~~,,,,,,,,,,,",
-        ",,===============,,,,,,,,,,~~,,,,,T,,,,,",
-        ",,==,,D,d,,D,d,,,,,,,,,,,,,~~,,,,,,,,,,,",
-        ",,==,hhh,,hhh,,,,,,,*,,,,,,~~,,,,,,,,,,,",
-        ",,==,hhh,,hhhT,,,,,,,,,,,,,,~~,*,,,,,,,,",
-        "TT==TTTTTTTTTTTTTTTTTTTTTTT,~~,TTTTTTTTT",
-      ],
+      layout: "osm-2", // change when the map is regenerated, so old saved spots reset
+      tiles: G.tiles,
       warps: [
-        { x: 14, y: 14, to: "home", tx: 3, ty: 6, dir: "up" },   // Our House
-        { x: 17, y: 16, to: "grams", tx: 4, ty: 6, dir: "up" },  // Gram's House
+        { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 3, ty: 6, dir: "up" },
+        { x: sp.grams.door[0], y: sp.grams.door[1], to: "grams", tx: 4, ty: 6, dir: "up" },
       ],
-      signs: [
-        { x: 14, y: 13, text: ["OUR HOUSE"] },
-        { x: 17, y: 15, text: ["GRAM'S HOUSE", "Visitors always welcome. Cookies sometimes."] },
-        { x: 14, y: 4, text: ["CRESCENT DRIVE", "Parkview Drive is just up north."] },
-        { x: 4, y: 4, text: ["EDGEWOOD DRIVE"] },
-        { x: 17, y: 12, text: ["ROCHELLE DRIVE"] },
-        { x: 17, y: 23, text: ["MIDGETT DRIVE"] },
-        { x: 23, y: 4, text: ["BROTHERS DRIVE", "Forbes Bay is just past the sand. Swim, but stay safe!"] },
-        { x: 26, y: 7, text: ["FORBES BAY DOCK", "Uncle Pat's boat is tied up at the end."] },
-      ],
+      signs,
       people: [
-        { x: 16, y: 8, look: "friend", dir: "down", wander: true, talk: [
+        { x: ox + 5, y: street, look: "friend", dir: "left", wander: true, talk: [
           "Hi! I saw a SQUEAKS run into a yard on Crescent Drive!",
         ] },
-        { x: 20, y: 10, look: "friend", dir: "left", wander: true, talk: [
+        { x: ox - 14, y: street - 1, look: "friend", dir: "right", wander: true, talk: [
           "Snakes like the tall grass near the creek. Some are really shy!",
         ] },
-        { x: 34, y: 7, look: "uncle", dir: "down", action: "fishing", talk: [
+        { x: sp.dock.pat[0], y: sp.dock.pat[1], look: "uncle", dir: "down", action: "fishing", talk: [
           "UNCLE PAT: Ahoy there, kiddo! Want to go fishing?",
           "First you have to answer my math question!",
         ] },
       ],
       // things you can pick up
-      items: [{ x: 14, y: 16, kind: "bike" }],
+      items: sp.bike ? [{ x: sp.bike[0], y: sp.bike[1], kind: "bike" }] : [],
       // more copies of a name = met more often
       critters: [
         "squeaks", "squeaks", "squeaks",
@@ -193,8 +176,9 @@
       ],
       // who you can meet while swimming
       waterCritters: ["finny", "finny", "finny", "pinchy", "pinchy", "shelby", "bloop"],
-    },
-  };
+    };
+  }
+  MAPS.crescent = buildCrescent();
 
   /* What can bite on Uncle Pat's line. More copies = more often. */
   const CATCHES = ["finny", "finny", "finny", "finny", "pinchy", "pinchy", "shelby", "shelby", "bloop", "boot"];

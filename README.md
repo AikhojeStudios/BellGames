@@ -59,4 +59,16 @@ Save drawings as PNG with a transparent background in `assets/adventure/`, then 
 
 Controls: drag the joystick to walk, A to talk and choose, B to go back, ☰ for the menu. On a keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M opens the menu.
 
-The Crescent Drive street layout is traced from OpenStreetMap (© OpenStreetMap contributors, ODbL); house positions are placed on typical lots. The credit also appears in the game's menu.
+### The Crescent Drive map
+
+The map is built from a real OpenStreetMap export by `tools/osm_to_map.py`:
+
+```
+python3 tools/osm_to_map.py map.osm > js/games/adventure/crescent-map.js
+```
+
+The tool straightens the map along Crescent Drive, so Crescent runs straight across the middle (south end on the left, north end on the right). Every other street, the creek and Forbes Bay keep where they meet Crescent and which side they're on. OpenStreetMap has no house outlines for these streets, so the tool places houses on lots facing the nearest street, each with a doorstep and driveway. It also picks Our House and Gram's House (a pair facing each other across Crescent), the bike's spot and Uncle Pat's dock on the bay. `world.js` adds the people, signs and story on top. Settings (tile size, how far to include on each side, and so on) are at the top of the tool.
+
+After regenerating, change `layout` on the Crescent map in `world.js` so old saved positions reset to home instead of landing inside a wall.
+
+Map data © OpenStreetMap contributors (ODbL). The credit also appears in the game's menu.

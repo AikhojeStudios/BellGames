@@ -179,8 +179,12 @@
       this.riding = false;
       // where the bike is parked: from the save, or its starting spot
       this.bike = save?.bike && MAPS[save.bike.map] ? save.bike : this.bikeHome();
-      const at = save && MAPS[save.map] ? save : START;
+      // a save from an older version of a map may point somewhere that's now a wall
+      const fresh = (m) => !MAPS[m]?.layout || save?.layouts?.[m] === MAPS[m].layout;
+      const at = save && MAPS[save.map] && fresh(save.map) ? save : START;
+      if (this.bike && !fresh(this.bike.map)) this.bike = this.bikeHome();
       this.loadMap(at.map, at.x, at.y, at.dir);
+      if (this.tileAt(at.x, at.y).solid) this.loadMap(START.map, START.x, START.y, START.dir);
       this.scene = "world";
       this.dialog = this.menu = this.fade = this.battle = null;
       this.tick = 0;
@@ -212,6 +216,7 @@
         friends: [...this.friends], seen: [...this.seen], hasBike: this.hasBike,
         // while riding, the bike is wherever you are
         bike: this.bike || { map: this.mapId, x: this.player.x, y: this.player.y },
+        layouts: Object.fromEntries(Object.entries(MAPS).filter(([, m]) => m.layout).map(([id, m]) => [id, m.layout])),
       });
     },
 
