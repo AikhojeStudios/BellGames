@@ -444,6 +444,7 @@
       this.openMenu({
         kind: "start",
         title: "Menu",
+        note: "Map data © OpenStreetMap contributors",
         items: ["Critter Book", "Close"],
         onPick: (i) => {
           this.menu = null;
@@ -711,6 +712,7 @@
               type: "button", class: "mitem", text: it,
               onclick: () => { m.i = i; Input.press("a"); },
             }))),
+          ...(m.note ? [h("p", { class: "mnote", text: m.note })] : []),
           ...(m.onBack ? [h("button", { type: "button", class: "mback", text: "Back", onclick: () => Input.press("b") })] : []));
       }
       if (m) this.menuEl.querySelectorAll(".mitem").forEach((el, i) => el.classList.toggle("sel", i === m.i));

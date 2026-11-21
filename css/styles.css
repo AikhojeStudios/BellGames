@@ -481,6 +481,7 @@ button:focus-visible { outline: 4px solid var(--purple); outline-offset: 3px; }
   display: block; margin: 10px auto 0; border: none; background: none; cursor: pointer;
   font-family: var(--hand); font-size: 20px; color: var(--ink-soft); text-decoration: underline;
 }
+.mnote { margin: 10px 0 0; font-size: 14px; text-align: center; color: var(--ink-soft); }
 .advmenu[data-kind=start] { left: auto; right: 12px; top: 70px; bottom: auto; width: 220px; }
 .advhud {
   position: absolute; left: 12px; top: 12px; display: flex; flex-direction: column; gap: 2px;

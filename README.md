@@ -42,7 +42,7 @@ assets/coins/       coin pictures
 
 ## Going on an Adventure
 
-Walk around the neighborhood, talk to people, read signs, and meet critters in the tall grass (every yard is tall grass). Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (the ☰ button). Progress is saved in the browser.
+Home base is Crescent Drive: Our House and Gram's House face each other across the street. Walk around the neighborhood, ride your bike, talk to people, read signs, and meet critters in the tall grass (every yard is tall grass). Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (the ☰ button). Progress is saved in the browser.
 
 - **Pictures** (`js/games/adventure/draw.js`): every picture is either one of your hand-drawn PNGs or a placeholder doodle drawn in code. Add your drawings one at a time; anything not drawn yet keeps its placeholder.
 - **Maps, people, critters, questions** (`js/games/adventure/world.js`): maps are one character per tile, using the `TILES` key at the top of the file. Each map lists its `warps` (doors), `people` (where they stand, what they say, whether they wander), `signs`, and which `critters` live in its tall grass.
@@ -58,3 +58,5 @@ Save drawings as PNG with a transparent background in `assets/adventure/`, then 
 - **Objects** (trees, signs, furniture): by map letter, with a size in tiles. The bottom of the picture sits on its tile.
 
 Controls: drag the joystick to walk, A to talk and choose, B to go back, ☰ for the menu. On a keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M opens the menu.
+
+The Crescent Drive street layout is traced from OpenStreetMap (© OpenStreetMap contributors, ODbL); house positions are placed on typical lots. The credit also appears in the game's menu.

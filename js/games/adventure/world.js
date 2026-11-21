@@ -67,18 +67,18 @@
         "________",
         "___M____",
       ],
-      warps: [{ x: 3, y: 7, to: "street", tx: 3, ty: 6, dir: "down" }],
+      warps: [{ x: 3, y: 7, to: "crescent", tx: 14, ty: 15, dir: "down" }],
       people: [
         { x: 5, y: 3, look: "mom", dir: "down", talk: [
           "MOM: Going on an adventure? How exciting!",
-          "Critters hide in the tall grass in everyone's yards. Answer their questions to make friends.",
-          "Your bike is out front by the driveway. Be home for dinner!",
+          "Critters hide in the tall grass in everyone's yards on Crescent Drive. Answer their questions to make friends.",
+          "Your bike is right outside by the driveway. Gram lives just across the street. Be home for dinner!",
         ] },
       ],
     },
 
-    rowan: {
-      name: "Rowan's House",
+    grams: {
+      name: "Gram's House",
       border: "X",
       indoors: true,
       tiles: [
@@ -91,55 +91,84 @@
         "_rr_____",
         "____M___",
       ],
-      warps: [{ x: 4, y: 7, to: "street", tx: 18, ty: 6, dir: "down" }],
+      warps: [{ x: 4, y: 7, to: "crescent", tx: 17, ty: 17, dir: "down" }],
       people: [
         { x: 5, y: 3, look: "elder", dir: "down", talk: [
-          "ROWAN: When I was little, I made friends with every critter on this street.",
-          "Can you find them all? Tap the menu button to look in your CRITTER BOOK.",
+          "GRAM: There's my favorite explorer! Come give Gram a hug.",
+          "When I was little, I made friends with every critter on Crescent Drive. Can you?",
+          "Tap the menu button to look in your CRITTER BOOK.",
         ] },
       ],
     },
 
-    // A stand-in street until the real neighborhood map is ready.
-    street: {
-      name: "Our Street",
+    // Home base. Street layout traced from OpenStreetMap (© OpenStreetMap contributors).
+    // Houses are placed on typical lots along each street.
+    crescent: {
+      name: "Crescent Drive",
       border: "T",
       tiles: [
-        "TTTTTTTTTTTTTTTTTTTTTT",
-        "T,,,,,,,,,,,,,,,,,,,,T",
-        "T,hhhh,,,hhhhh,,hhhh,T",
-        "T,hhhh,,,hhhhh,,hhhh,T",
-        "T,hhhh,T,hhhhh,,hhhh,T",
-        "T,,D,,,,,,,D,,,,,,D,,T",
-        "T,,d,,*,,,,d,,*,,,d,,T",
-        "::::::::::::::::::::::",
-        "======================",
-        "======================",
-        "::::::::::::::::::::::",
-        "T,,,d,,,,,,d,,,,,,d,,T",
-        "T,,,D,,,,,,D,,,,,,D,,T",
-        "T,hhhhh,,hhhhh,,hhhh,T",
-        "T,hhhhh,,hhhhh,,hhhh,T",
-        "T,hhhhh,,hhhhh,,hhhh,T",
-        "T,,,,,,,,,S,,,,,,,,,,T",
-        "T,,*,,T,,,,,,,T,,,*,,T",
-        "TTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "==============================",
+        "==============================",
+        "::==:::::::::::==:::::::==::::",
+        ",,==S,,,,,,,,,S==,,,,,,S==,T,,",
+        ",,==Dhhh,,,hhhD==Dhhh,,,==,,,,",
+        ",,==dhhh,T,hhhd==dhhh,T,==T,,,",
+        ",,==,,,,,,,,,,,==,,,,,,,==,,,,",
+        ",,==Dhhh,,,hhhD==Dhhh,,,==,,,,",
+        ",,==dhhh,*,hhhd==dhhh,,,==,,,,",
+        ",,==,,,,,,,,,,,===========,,,,",
+        ",,==Dhhh,,,hhhD===========,,,,",
+        ",,==dhhh,T,hhhd==S,,,,,,==,,~~",
+        ",,==,,,,,,,,,,S==DhhhT,,==,,~~",
+        ",,==Dhhh,,,hhhD==dhhh,,,==*,~~",
+        ",,==dhhh,,,hhhd==S,,,,T,==,,~~",
+        ",,==,,,,,,,,,,,==Dhhh,,,==,~~,",
+        ",,==Dhhh,*,hhhD==dhhh,,,==,~~,",
+        ",,==dhhh,,,hhhd==,,,,T,,==,~~,",
+        ",,==,,,,,,,,,,,==,,,,,,,==,~~,",
+        ",,==DhhhT,,hhhD==,,,,,,,==,,~~",
+        ",,==dhhh,,,hhhd===========,,~~",
+        ",,==,,,,,,,,,,,===========,,~~",
+        ",,==Dhhh,,,hhhD==S,,,,,D,d,,~~",
+        ",,==dhhh,*,hhhd==Dhhh,hhh,,~~,",
+        ",,==,,,,,,,,,,,==dhhh,hhh,,~~,",
+        ",,==Dhhh,,,hhhD==,,,,,,,,,,~~,",
+        ",,==dhhh,,Thhhd==Dhhh,,,,,,~~,",
+        ",,==,,,,,,,,,,,==dhhh,,T,,,,~~",
+        ",,==Dhhh,,,hhhD==,,,,,,,,,,,~~",
+        ",,==dhhh,,,hhhd==Dhhh,,,,,,,~~",
+        ",,==,,,,,,,,,,,==dhhh,,,,,,,~~",
+        ",,===============,,,,,,,,,,~~,",
+        ",,===============,,,,,,,,,,~~,",
+        ",,==,,D,d,,D,d,,,,,,,,,,,,,~~,",
+        ",,==,hhh,,hhh,,,,,,,*,,,,,,~~,",
+        ",,==,hhh,,hhhT,,,,,,,,,,,,,,~~",
+        "TT==TTTTTTTTTTTTTTTTTTTTTTT,~~",
       ],
       warps: [
-        { x: 3, y: 5, to: "home", tx: 3, ty: 6, dir: "up" },
-        { x: 18, y: 5, to: "rowan", tx: 4, ty: 6, dir: "up" },
+        { x: 14, y: 14, to: "home", tx: 3, ty: 6, dir: "up" },   // Our House
+        { x: 17, y: 16, to: "grams", tx: 4, ty: 6, dir: "up" },  // Gram's House
       ],
-      signs: [{ x: 10, y: 16, text: ["OUR STREET", "Watch out for critters in the tall grass!"] }],
+      signs: [
+        { x: 14, y: 13, text: ["OUR HOUSE"] },
+        { x: 17, y: 15, text: ["GRAM'S HOUSE", "Visitors always welcome. Cookies sometimes."] },
+        { x: 14, y: 4, text: ["CRESCENT DRIVE", "Parkview Drive is just up north."] },
+        { x: 4, y: 4, text: ["EDGEWOOD DRIVE"] },
+        { x: 17, y: 12, text: ["ROCHELLE DRIVE"] },
+        { x: 17, y: 23, text: ["MIDGETT DRIVE"] },
+        { x: 23, y: 4, text: ["BROTHERS DRIVE", "The creek runs along the back. Snakes love it there!"] },
+      ],
       people: [
-        { x: 8, y: 7, look: "friend", dir: "left", wander: true, talk: [
-          "Hi! I saw a FIZZBUN hop into a yard over there!",
+        { x: 16, y: 8, look: "friend", dir: "down", wander: true, talk: [
+          "Hi! I saw a SQUEAKS run into a yard on Crescent Drive!",
         ] },
-        { x: 14, y: 10, look: "friend", dir: "down", wander: true, talk: [
-          "Critters get bored if you guess wrong. Take your time and think!",
+        { x: 20, y: 10, look: "friend", dir: "left", wander: true, talk: [
+          "Snakes like the tall grass near the creek. Some are really shy!",
         ] },
       ],
       // things you can pick up
-      items: [{ x: 4, y: 6, kind: "bike" }],
+      items: [{ x: 14, y: 16, kind: "bike" }],
       // more copies of a name = met more often
       critters: [
         "squeaks", "squeaks", "squeaks",
