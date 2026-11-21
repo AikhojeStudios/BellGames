@@ -171,6 +171,8 @@
       this.seen = new Set(save?.seen || []);
       this.hasBike = !!save?.hasBike;
       this.riding = false;
+      // where the bike is parked: from the save, or its starting spot
+      this.bike = save?.bike && MAPS[save.bike.map] ? save.bike : this.bikeHome();
       const at = save && MAPS[save.map] ? save : START;
       this.loadMap(at.map, at.x, at.y, at.dir);
       this.scene = "world";
@@ -202,7 +204,18 @@
       App.Store.set("adventure", {
         map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir,
         friends: [...this.friends], seen: [...this.seen], hasBike: this.hasBike,
+        // while riding, the bike is wherever you are
+        bike: this.bike || { map: this.mapId, x: this.player.x, y: this.player.y },
       });
+    },
+
+    /** The bike's starting spot: the first map that lists one in its items. */
+    bikeHome() {
+      for (const [id, m] of Object.entries(MAPS)) {
+        const it = (m.items || []).find((i) => i.kind === "bike");
+        if (it) return { map: id, x: it.x, y: it.y };
+      }
+      return null;
     },
 
     updateProgress() {
@@ -230,8 +243,8 @@
       this.people = (this.map.people || []).map((p) => ({
         ...p, home: { x: p.x, y: p.y }, fromX: p.x, fromY: p.y, moving: false, t: 0, wait: randInt(60, 200),
       }));
-      this.items = (this.map.items || []).filter((it) => !(it.kind === "bike" && this.hasBike));
-      if (this.map.indoors) this.riding = false;
+      this.items = (this.map.items || []).filter((it) => it.kind !== "bike");
+      if (this.bike && this.bike.map === id) this.items.push({ kind: "bike", x: this.bike.x, y: this.bike.y });
       this.grace = 2;
       this.labelHouses();
     },
@@ -264,7 +277,7 @@
       if (y < 0 || y >= this.map.tiles.length || x < 0 || x >= this.map.tiles[0].length) return true;
       if (this.tileAt(x, y).solid) return true;
       if (this.people.some((p) => p !== who && p.x === x && p.y === y)) return true;
-      if (this.itemAt(x, y)) return true;
+      if (this.itemAt(x, y) && !(who === this.player && this.player.x === x && this.player.y === y)) return true;
       const pl = this.player;
       return who !== pl && pl.x === x && pl.y === y;
     },
@@ -315,7 +328,7 @@
       if (p.bumpWait > 0) p.bumpWait--;
       if (Input.take("start")) return this.openStartMenu();
       if (Input.take("a")) return this.interact();
-      if (Input.take("b")) return this.toggleBike();
+      if (Input.take("b")) return this.bikeButton();
 
       const d = Input.dir();
       if (!d) { p.chain = false; p.turn = 0; return; }
@@ -335,12 +348,42 @@
       p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime();
     },
 
-    toggleBike() {
-      if (!this.hasBike) return;
-      if (this.map.indoors) return this.say(["No bikes in the house!"]);
-      this.riding = !this.riding;
-      if (this.riding) { tone(660, 0.06, "triangle", 0.1); tone(990, 0.08, "triangle", 0.1, 0.06); }
-      else tone(440, 0.08, "triangle", 0.1);
+    /** B: get off if riding, or get on if the bike is right here. */
+    bikeButton() {
+      const p = this.player;
+      if (this.riding) return this.getOff();
+      const here = this.itemAt(p.x, p.y);
+      const ahead = this.itemAt(p.x + DIRS[p.dir][0], p.y + DIRS[p.dir][1]);
+      const bike = [here, ahead].find((it) => it && it.kind === "bike");
+      if (bike) return this.getOn(bike);
+      if (this.hasBike && this.map.indoors) return this.say(["No bikes in the house! Your bike is parked outside."]);
+      if (this.hasBike && this.bike) {
+        const where = this.bike.map === this.mapId ? "" : ` at ${MAPS[this.bike.map].name}`;
+        this.say([`Your bike is parked${where}. Walk up to it and press A to ride.`]);
+      }
+    },
+
+    getOn(bike) {
+      this.items = this.items.filter((it) => it !== bike);
+      this.bike = null;
+      const first = !this.hasBike;
+      this.hasBike = true;
+      this.save();
+      if (first) {
+        App.Sound.win();
+        return this.say(["It's your bike!", "Press B to hop off. Walk up to it and press A to ride again. Bikes go twice as fast!"], () => { this.riding = true; });
+      }
+      this.riding = true;
+      tone(660, 0.06, "triangle", 0.1); tone(990, 0.08, "triangle", 0.1, 0.06);
+    },
+
+    /** Park the bike on a tile (where you are, unless given). */
+    getOff(x = this.player.x, y = this.player.y) {
+      this.riding = false;
+      this.bike = { map: this.mapId, x, y };
+      this.items.push({ kind: "bike", x, y });
+      this.save();
+      tone(440, 0.08, "triangle", 0.1);
     },
 
     /** Called when the player finishes a step. Returns true if a door or critter took over. */
@@ -348,6 +391,7 @@
       const p = this.player;
       const warp = (this.map.warps || []).find((w) => w.x === p.x && w.y === p.y);
       if (warp) {
+        if (this.riding && MAPS[warp.to].indoors) this.getOff(p.fromX, p.fromY);
         sfx.door();
         this.transition(() => { this.loadMap(warp.to, warp.tx, warp.ty, warp.dir); this.save(); });
         return true;
@@ -385,13 +429,7 @@
         return this.say(person.talk);
       }
       const item = this.itemAt(fx, fy);
-      if (item && item.kind === "bike") {
-        this.items = this.items.filter((it) => it !== item);
-        this.hasBike = true;
-        this.save();
-        App.Sound.win();
-        return this.say(["It's your bike!", "Press B to hop on and off. Bikes go twice as fast!"], () => { this.riding = true; });
-      }
+      if (item && item.kind === "bike") return this.getOn(item);
       const sign = (this.map.signs || []).find((s) => s.x === fx && s.y === fy);
       if (sign) this.say(sign.text);
     },
@@ -614,7 +652,7 @@
           D.object(c, o.tile.object, o.ch, o.sx, o.sy, T, dpr, AD.maskOf(same(o.tx, o.ty, o.ch)), o.variant, info);
         } })),
         ...actors.map((a) => ({ y: a.at.y + 0.95, draw: () => this.drawActor(a, camX, camY, t) })),
-        ...this.items.map((it) => ({ y: it.y + 1, draw: () => {
+        ...this.items.map((it) => ({ y: it.y + 0.9, draw: () => {
           D.object(c, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0);
         } })),
       ].sort((a, b) => a.y - b.y);
