@@ -272,6 +272,20 @@
     void(c, s) { c.fillStyle = C.dark; c.fillRect(0, 0, s, s); },
     garden(c, s, r, same) { gardenBed(c, s, r, same, false); },
     gardenBloom(c, s, r, same) { gardenBed(c, s, r, same, true); },
+    carpet(c, s, r) {
+      c.fillStyle = "#CFC3DD"; c.fillRect(0, 0, s, s);
+      for (let i = 0; i < 14; i++) { c.fillStyle = i % 2 ? "rgba(255,255,255,.35)" : "rgba(90,70,120,.12)"; c.fillRect(r() * s, r() * s, s * 0.03, s * 0.03); }
+    },
+    bathroom(c, s) {
+      c.fillStyle = "#F4FAFC"; c.fillRect(0, 0, s, s);
+      c.strokeStyle = "#B9DCE8"; c.lineWidth = s * 0.025;
+      for (let i = 0; i <= 3; i++) { c.beginPath(); c.moveTo(0, (i * s) / 3); c.lineTo(s, (i * s) / 3); c.moveTo((i * s) / 3, 0); c.lineTo((i * s) / 3, s); c.stroke(); }
+    },
+    concrete(c, s, r) {
+      c.fillStyle = "#C3C0B8"; c.fillRect(0, 0, s, s);
+      for (let i = 0; i < 6; i++) { c.fillStyle = "rgba(80,75,70,.12)"; c.fillRect(r() * s, r() * s, s * 0.04, s * 0.04); }
+      if (r() < 0.3) line(c, s * 0.1, s * r(), s * 0.6, s * r(), r, s * 0.05, s * 0.02, "rgba(80,75,70,.35)");
+    },
     kitchen(c, s) {
       const n = 4, q = s / n;
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
@@ -450,6 +464,38 @@
         c.fillStyle = "#7A5634"; c.fillRect(s * 0.1, y + s * 0.36, s * 0.8, s * 0.04);
         for (let i = 0; i < 5; i++) { c.fillStyle = cols[(i + row) % 5]; c.fillRect(s * (0.14 + i * 0.15), y + s * (0.08 + (i % 2) * 0.04), s * 0.11, s * (0.28 - (i % 2) * 0.04)); }
       }
+    },
+    desk(c, s, r, same) {
+      const x0 = same(-1, 0) ? -1 : s * 0.04, x1 = same(1, 0) ? s + 1 : s * 0.96;
+      c.fillStyle = "#A4774A"; c.fillRect(x0, s * 0.55, x1 - x0, s * 0.35);
+      c.fillStyle = "#C99A6B"; c.fillRect(x0, s * 0.1, x1 - x0, s * 0.5);
+      c.strokeStyle = C.ink; c.lineWidth = s * 0.04; c.strokeRect(x0, s * 0.1, x1 - x0, s * 0.8);
+      if (!same(-1, 0)) {   // a laptop on the left end
+        c.beginPath(); c.roundRect(s * 0.2, s * 0.15, s * 0.5, s * 0.32, s * 0.03); paint(c, "#3A3A42", s * 0.03);
+        c.fillStyle = "#8ACFE8"; c.fillRect(s * 0.25, s * 0.19, s * 0.4, s * 0.22);
+      } else { c.fillStyle = "#FFFFFF"; c.fillRect(s * 0.25, s * 0.2, s * 0.35, s * 0.25); }
+    },
+    toilet(c, s) {
+      c.beginPath(); c.roundRect(s * 0.25, s * 0.05, s * 0.5, s * 0.25, s * 0.06); paint(c, "#FFFFFF", s * 0.04);
+      ellipse(c, s / 2, s * 0.58, s * 0.24, s * 0.3); paint(c, "#FFFFFF", s * 0.04);
+      ellipse(c, s / 2, s * 0.6, s * 0.14, s * 0.18); paint(c, "#BFE3F2");
+    },
+    tub(c, s, r, same) {
+      const y0 = same(0, -1) ? -1 : s * 0.06, y1 = same(0, 1) ? s + 1 : s * 0.94;
+      c.beginPath(); c.roundRect(s * 0.1, y0, s * 0.8, y1 - y0, s * 0.18); paint(c, "#FFFFFF", s * 0.045);
+      c.beginPath(); c.roundRect(s * 0.2, y0 + s * 0.1, s * 0.6, y1 - y0 - s * 0.2, s * 0.12); paint(c, "#9AD3EA");
+      if (!same(0, -1)) { ellipse(c, s / 2, s * 0.14, s * 0.05, s * 0.05); paint(c, "#B9C6D1"); }
+    },
+    /** A car seen from above, parked nose-up. Two car tiles stack; only the bottom one draws it. */
+    car(c, s, r, same) {
+      if (same(0, 1)) return;
+      const x0 = -s * 0.12, w = s * 1.24, y0 = -s * 1.05, hh = s * 1.95;
+      ellipse(c, s / 2, s * 0.92, s * 0.65, s * 0.08); paint(c, "rgba(0,0,0,.18)");
+      c.beginPath(); c.roundRect(x0, y0, w, hh, s * 0.3); paint(c, "#3E6E9E", s * 0.05);
+      c.beginPath(); c.roundRect(x0 + s * 0.14, y0 + s * 0.35, w - s * 0.28, s * 0.3, s * 0.1); paint(c, "#BFE3F2", s * 0.035);
+      c.beginPath(); c.roundRect(x0 + s * 0.14, y0 + s * 1.35, w - s * 0.28, s * 0.24, s * 0.08); paint(c, "#BFE3F2", s * 0.035);
+      c.beginPath(); c.roundRect(x0 + s * 0.18, y0 + s * 0.7, w - s * 0.36, s * 0.6, s * 0.06); paint(c, "#5D8BBD", s * 0.03);
+      [[x0 + s * 0.12, y0 + s * 0.05], [x0 + w - s * 0.32, y0 + s * 0.05]].forEach(([x, y]) => { c.fillStyle = "#F7D35C"; c.fillRect(x, y, s * 0.2, s * 0.08); });
     },
     bed(c, s, r) {
       blob(c, rectPts(s * 0.08, s * 0.02, s * 0.84, s * 0.94), r, s * 0.03); paint(c, "#8DB8E0", s * 0.04);

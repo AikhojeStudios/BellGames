@@ -1203,7 +1203,14 @@
             wet.push([tx, ty, sx, sy]);
             if (tile.ground === "dock") docks.push([tx, ty, sx, sy, ch]);
           } else {
-            const gname = ch === "g" && this.questsDone.includes("garden") ? "gardenBloom" : tile.ground;
+            let gname = ch === "g" && this.questsDone.includes("garden") ? "gardenBloom" : tile.ground;
+            // furniture sits on whatever floor the room has (carpet, tiles...), not always wood
+            if (tile.object && tile.ground === "floor") {
+              for (const [dx, dy] of [[0, 1], [1, 0], [-1, 0], [0, -1]]) {
+                const nt = TILES[this.charAt(tx + dx, ty + dy)];
+                if (nt && !nt.object && !nt.solid && nt.ground !== "floor" && ["carpet", "bathroom", "kitchen", "concrete"].includes(nt.ground)) { gname = nt.ground; break; }
+              }
+            }
             D.ground(c, gname, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
           }
           if (tile.object) objects.push({ y: ty + 1, tx, ty, ch, tile, sx, sy, variant });
