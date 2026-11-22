@@ -13,7 +13,7 @@
   const { h, pick, randInt } = App.util;
   const AD = App.Adventure;
   const D = AD.draw;
-  const { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, makeQuestion, makeFact } = AD.world;
+  const { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, makeQuestion, makeFact } = AD.world;
 
   const STEP = 14;            // frames to walk one tile
   const BIKE_STEP = 8;        // frames to ride one tile
@@ -430,18 +430,43 @@
     },
 
     /* ---------------- quests ---------------- */
-    talkParent(person) {
-      const who = person.parent, WHO = who.toUpperCase();
+    /** The next quest this person can give, if any. */
+    availableQuest(id) {
+      return Object.keys(QUESTS).find((k) => QUESTS[k].giver === id && !this.questsDone.includes(k));
+    },
+
+    /**
+     * Quest talk with anyone: offering a quest, checking on progress, or
+     * finishing it. Returns false if this person has nothing quest-related to say.
+     */
+    questTalk(person) {
+      const id = person.id;
+      if (!id) return false;
+      const NAME = person.name || id.toUpperCase();
+      const fishing = person.action === "fishing";
+      const thenFish = fishing ? () => this.fishingQuestion() : undefined;
       const q = this.quest, Q = q && QUESTS[q.id];
       if (Q) {
-        if (Q.giver !== who) return this.say([`${WHO}: Finish helping ${Q.squirrelName} first, then come see me!`]);
-        if (q.have >= Q.need) return this.say([`${WHO}: You found them all! Go give them to ${Q.squirrelName}!`]);
-        return this.say([`${WHO}: How's it going? You've found ${q.have} of ${Q.need} ${Q.items}.`, Q.hint]);
+        if (Q.to === id && q.have >= Q.need) { this.finishQuest(); return true; }
+        if (Q.giver === id && q.have >= Q.need) { this.say([`${NAME}: You did it! Now go see ${Q.toName}!`]); return true; }
+        if (Q.giver === id || Q.to === id) {
+          this.say([`${NAME}: You've got ${q.have} of ${Q.need} ${Q.items}. ${Q.hint}`], thenFish);
+          return true;
+        }
+        if (this.availableQuest(id)) {
+          this.say([`${NAME}: Finish helping ${Q.toName} first, then come see me!`], thenFish);
+          return true;
+        }
+        return false;
       }
-      const next = Object.keys(QUESTS).find((id) => QUESTS[id].giver === who && !this.questsDone.includes(id));
+      const next = this.availableQuest(id);
       if (!next) {
-        const done = this.questsDone.filter((id) => QUESTS[id].giver === who).length;
-        return this.say(done ? [`${WHO}: Thanks for helping the squirrels. I'm so proud of you!`, ...person.talk.slice(1)] : person.talk);
+        if (fishing || person.look === "squirrel") return false;
+        if (Object.keys(QUESTS).some((k) => QUESTS[k].giver === id && this.questsDone.includes(k))) {
+          this.say([`${NAME}: Thank you for all your help. I'm so proud of you!`, ...person.talk.slice(1)]);
+          return true;
+        }
+        return false;
       }
       const N = QUESTS[next];
       this.say(N.offer, () => this.openMenu({
@@ -450,29 +475,33 @@
         items: ["Yes, I'll help!", "Not right now"],
         onPick: (i) => {
           this.menu = null;
-          if (i === 0) this.startQuest(next);
-          else this.say([`${WHO}: Okay! Come find me when you're ready.`]);
+          if (i === 0) this.startQuest(next, thenFish);
+          else this.say([`${NAME}: Okay! Come find me when you're ready.`], thenFish);
         },
         onBack: () => { this.menu = null; },
       }));
+      return true;
     },
 
-    startQuest(id) {
+    startQuest(id, then) {
       const Q = QUESTS[id];
-      this.quest = { id, have: 0, spots: this.hideItems(Q.map, Q.item, Q.need + 3) };
+      this.quest = { id, have: 0, spots: Q.kind === "collect" ? this.hideItems(Q) : [] };
       this.pickups = this.quest.spots.filter((sp) => sp.map === this.mapId);
       this.save();
       App.Sound.win();
-      this.say([Q.accept, `Quest started: ${Q.title}! While you're on it, wild critters will stay away.`]);
+      this.say([Q.accept, `Quest started: ${Q.title}! While you're on it, wild critters will stay away.`], then);
     },
 
-    /** Hide quest items in the tall grass of a map's quest area, spread apart. */
-    hideItems(mapId, kind, n) {
-      const m = MAPS[mapId], area = m.questArea || { x0: 0, x1: m.tiles[0].length - 1 };
+    /** Hide a quest's items: in the tall grass near home, or in a named area (like Gram's garden). */
+    hideItems(Q) {
+      const mapId = Q.map, kind = Q.item, n = Q.need + (Q.extra ?? 3), gap = Q.spacing ?? 6;
+      const m = MAPS[mapId];
+      const area = (Q.area && m[Q.area]) || { y0: 0, y1: m.tiles.length - 1, ...(m.questArea || { x0: 0, x1: m.tiles[0].length - 1 }) };
+      const want = Q.tile || ",";
       const spots = [];
       const cand = [];
       m.tiles.forEach((row, y) => [...row].forEach((ch, x) => {
-        if (ch !== "," || x < area.x0 || x > area.x1) return;
+        if (ch !== want || x < area.x0 || x > area.x1 || y < area.y0 || y > area.y1) return;
         if ((m.people || []).some((p) => Math.abs(p.x - x) + Math.abs(p.y - y) < 2)) return;
         // squirrels drop things under trees, so favor spots near one
         let near = 0;
@@ -483,7 +512,7 @@
         const total = cand.reduce((a, c) => a + c.w, 0);
         let r = Math.random() * total, c = cand[0];
         for (const cc of cand) { r -= cc.w; if (r <= 0) { c = cc; break; } }
-        if (spots.every((sp) => Math.abs(sp.x - c.x) + Math.abs(sp.y - c.y) >= 6)) spots.push({ map: mapId, x: c.x, y: c.y, kind, got: false });
+        if (spots.every((sp) => Math.abs(sp.x - c.x) + Math.abs(sp.y - c.y) >= gap)) spots.push({ map: mapId, x: c.x, y: c.y, kind, got: false });
       }
       return spots;
     },
@@ -498,20 +527,8 @@
       this.save();
       if (this.quest.have === Q.need) {
         App.Sound.win();
-        this.say([`That's all ${Q.need} ${Q.items}!`, `Bring them to ${Q.squirrelName}.`]);
+        this.say([`That's all ${Q.need} ${Q.items}!`, Q.doneSay || `Bring them to ${Q.toName}.`]);
       }
-    },
-
-    talkSquirrel(person) {
-      const q = this.quest, Q = q && QUESTS[q.id];
-      const NAME = person.squirrel.toUpperCase();
-      if (Q && Q.squirrel === person.squirrel) {
-        if (q.have >= Q.need) return this.finishQuest();
-        return this.say([`${NAME}: Chitter! You have ${q.have} ${Q.items}. I need ${Q.need}!`, Q.hint]);
-      }
-      const helped = Object.keys(QUESTS).some((id) => QUESTS[id].squirrel === person.squirrel && this.questsDone.includes(id));
-      if (helped) return this.say([`${NAME}: My friend! Thanks again for your help. Chitter chitter!`]);
-      this.say(person.talk);
     },
 
     finishQuest() {
@@ -523,9 +540,9 @@
       App.Sound.win();
       App.FX.celebrate(true, "Quest complete!");
       this.save();
-      const left = Object.keys(QUESTS).filter((id) => !this.questsDone.includes(id));
+      const left = [...new Set(Object.keys(QUESTS).filter((id) => !this.questsDone.includes(id)).map((id) => GIVERS[QUESTS[id].giver]))];
       this.say([...Q.thanks, `Quest complete! You earned ${QUEST_STARS} stars.`,
-        left.length ? `${QUESTS[left[0]].giver === "mom" ? "Mom" : "Dad"} might have another job for you.` : "You've finished every quest!"]);
+        left.length ? `${left.join(" or ")} might have another job for you.` : "You've finished every quest!"]);
     },
 
     /** Pop up the room's name when you walk into a new one. */
@@ -693,9 +710,11 @@
       const person = this.personAt(fx, fy);
       if (person) {
         if (!person.moving) person.dir = OPPOSITE[p.dir];
+        if (this.questTalk(person)) return;
         if (person.action === "fishing") return this.say(person.talk, () => this.fishingQuestion());
-        if (person.action === "parent") return this.talkParent(person);
-        if (person.action === "squirrel") return this.talkSquirrel(person);
+        if (person.look === "squirrel" && Object.keys(QUESTS).some((id) => QUESTS[id].to === person.id && this.questsDone.includes(id))) {
+          return this.say([`${person.name}: My friend! Thanks again for your help. Chitter chitter!`]);
+        }
         return this.say(person.talk);
       }
       const item = this.itemAt(fx, fy);
@@ -949,6 +968,15 @@
       this.ui.award({ celebrate: false });
       App.Sound.win();
       if (isNew) App.FX.celebrate(true, "New friend!");
+      let forPat = "";
+      const q = this.quest, Q = q && QUESTS[q.id];
+      if (Q && Q.kind === "fish" && q.have < Q.need) {
+        q.have++;
+        this.save();
+        forPat = q.have >= Q.need ? ` That's ${Q.need} for Uncle Pat! Tap Done fishing and tell him.` : ` That's ${q.have} of ${Q.need} for Uncle Pat!`;
+        this.fishSay(`You caught ${cr.name}! Into Uncle Pat's bucket it goes.${forPat}`, "Cast again");
+        return;
+      }
       this.fishSay(`You caught ${cr.name}! You say hi and let it swim away.${isNew ? " It's in your Critter Book now!" : ""}`, "Cast again");
     },
 
@@ -1175,7 +1203,8 @@
             wet.push([tx, ty, sx, sy]);
             if (tile.ground === "dock") docks.push([tx, ty, sx, sy, ch]);
           } else {
-            D.ground(c, tile.ground, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
+            const gname = ch === "g" && this.questsDone.includes("garden") ? "gardenBloom" : tile.ground;
+            D.ground(c, gname, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
           }
           if (tile.object) objects.push({ y: ty + 1, tx, ty, ch, tile, sx, sy, variant });
         }
@@ -1515,7 +1544,7 @@
       const q = this.quest, Q = q && QUESTS[q.id];
       this.questEl.hidden = !(Q && this.scene === "world");
       if (!this.questEl.hidden) {
-        const text = q.have >= Q.need ? `${Q.icon} Bring them to ${Q.squirrelName}!` : `${Q.icon} ${Q.title}: ${q.have} / ${Q.need}`;
+        const text = q.have >= Q.need ? `${Q.icon} ${Q.doneBanner || `Bring them to ${Q.toName}!`}` : `${Q.icon} ${Q.title}: ${q.have} / ${Q.need}`;
         if (this.questEl.textContent !== text) this.questEl.textContent = text;
       }
       // room name

@@ -270,6 +270,8 @@
       blob(c, rectPts(s * 0.12, s * 0.2, s * 0.76, s * 0.55), r, s * 0.03); paint(c, "#6F9BC9", s * 0.035);
     },
     void(c, s) { c.fillStyle = C.dark; c.fillRect(0, 0, s, s); },
+    garden(c, s, r, same) { gardenBed(c, s, r, same, false); },
+    gardenBloom(c, s, r, same) { gardenBed(c, s, r, same, true); },
     kitchen(c, s) {
       const n = 4, q = s / n;
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
@@ -292,6 +294,35 @@
       c.stroke();
     },
   };
+
+  /** Soil in rows with a wooden edge; when it blooms, flowers grow in the rows. */
+  function gardenBed(c, s, r, same, bloom) {
+    c.fillStyle = "#8B5E3C"; c.fillRect(0, 0, s, s);
+    c.strokeStyle = "#6E4A2E"; c.lineWidth = s * 0.05;
+    for (let y = s * 0.2; y < s; y += s * 0.3) { c.beginPath(); c.moveTo(0, y); c.lineTo(s, y + (r() - 0.5) * s * 0.04); c.stroke(); }
+    if (bloom) {
+      const colors = ["#F28DA8", "#F7D35C", "#FFFFFF", "#C69CF0", "#FF7A59"];
+      for (let i = 0; i < 4; i++) {
+        const x = s * (0.15 + (i % 2) * 0.45 + r() * 0.2), y = s * (0.2 + Math.floor(i / 2) * 0.45 + r() * 0.1);
+        line(c, x, y + s * 0.18, x, y, r, 0, s * 0.04, "#4F8C3B");
+        ellipse(c, x + s * 0.06, y + s * 0.1, s * 0.06, s * 0.03, 0.5); paint(c, "#62A24C");
+        const col = colors[Math.floor(r() * colors.length)];
+        for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2; ellipse(c, x + Math.cos(a) * s * 0.06, y + Math.sin(a) * s * 0.06, s * 0.05, s * 0.05); paint(c, col); }
+        ellipse(c, x, y, s * 0.035, s * 0.035); paint(c, "#E2A33B");
+      }
+    } else {
+      for (let i = 0; i < 3; i++) {
+        const x = s * (0.2 + r() * 0.6), y = s * (0.25 + r() * 0.6);
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x - s * 0.04, y - s * 0.06); c.moveTo(x, y); c.lineTo(x + s * 0.04, y - s * 0.06); ink(c, s * 0.03, "#7FB455");
+      }
+    }
+    c.fillStyle = "#A4774A";
+    const e = s * 0.07;
+    if (!same(0, -1)) c.fillRect(0, 0, s, e);
+    if (!same(0, 1)) c.fillRect(0, s - e, s, e);
+    if (!same(-1, 0)) c.fillRect(0, 0, e, s);
+    if (!same(1, 0)) c.fillRect(s - e, 0, e, s);
+  }
 
   /* ---------- objects (stand up off the ground; may spill over the tile above) ----------
      Drawn into a canvas 2 tiles wide and 2.5 tiles tall; the tile itself is at
@@ -754,6 +785,15 @@
     const lw = Math.max(1.3, s * 0.035);
     ellipse(c, cx, cy + s * 0.2, s * 0.16, s * 0.05); paint(c, "rgba(0,0,0,.18)");
     if (im) { const w = s * (pic.w || 0.4), hh = s * (pic.h || 0.4); c.drawImage(im, cx - w / 2, cy - hh / 2 + bob, w, hh); }
+    else if (kind === "weed") {
+      const sway = Math.sin(t * 2 + cx) * s * 0.03;
+      for (const [a, len] of [[-0.6, 0.22], [-0.2, 0.3], [0.25, 0.26], [0.65, 0.2]]) {
+        c.beginPath(); c.moveTo(cx, cy + s * 0.18);
+        c.quadraticCurveTo(cx + a * s * 0.15 + sway, cy, cx + a * s * 0.3 + sway, cy + s * 0.18 - len * s);
+        ink(c, s * 0.05, "#4F8C3B");
+      }
+      ellipse(c, cx + s * 0.05 + sway, cy - s * 0.12, s * 0.06, s * 0.06); paint(c, "#F7D35C", lw * 0.6);
+    }
     else if (kind === "acorn") {
       ellipse(c, cx, cy + s * 0.04 + bob, s * 0.13, s * 0.16); paint(c, "#C98B4B", lw);
       c.beginPath(); c.arc(cx, cy - s * 0.04 + bob, s * 0.15, Math.PI * 1.02, Math.PI * 1.98); c.closePath(); paint(c, "#7A5634", lw);

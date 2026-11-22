@@ -42,6 +42,7 @@
     "P": { ground: "floor", object: "plant", solid: true },
     "X": { ground: "void", solid: true }, // darkness outside a room
     // inside our house
+    "g": { ground: "garden" },                 // Gram's garden bed
     "w": { ground: "innerWall", solid: true }, // walls between rooms
     "k": { ground: "kitchen" },                // kitchen floor tiles
     "c": { ground: "kitchen", object: "counter", solid: true },
@@ -99,12 +100,12 @@
       ],
       warps: [{ x: 7, y: 11, to: "crescent", tx: 0, ty: 0, dir: "down" }], // set by buildCrescent
       people: [
-        { x: 2, y: 4, look: "mom", dir: "down", action: "parent", parent: "mom", talk: [
+        { x: 2, y: 4, look: "mom", dir: "down", id: "mom", name: "MOM", talk: [
           "MOM: Off on a Garter Quest? How exciting!",
           "Your bike is right outside, and your little brother wants a ride in the wagon!",
           "Gram lives just across the street. Be home for dinner!",
         ] },
-        { x: 4, y: 8, look: "dad", dir: "down", action: "parent", parent: "dad", talk: [
+        { x: 4, y: 8, look: "dad", dir: "down", id: "dad", name: "DAD", talk: [
           "DAD: Hey, champ! Uncle Pat says the fish are biting down at the dock.",
           "Critters hide in the tall grass. Answer their questions to make friends!",
         ] },
@@ -127,7 +128,7 @@
       ],
       warps: [{ x: 4, y: 7, to: "crescent", tx: 0, ty: 0, dir: "up" }], // set by buildCrescent
       people: [
-        { x: 5, y: 3, look: "elder", dir: "down", talk: [
+        { x: 5, y: 3, look: "elder", dir: "down", id: "gram", name: "GRAM", talk: [
           "GRAM: There's my favorite explorer! Come give Gram a hug.",
           "When I was little, I made friends with every critter on Crescent Drive. Can you?",
           "Tap the menu button to look in your CRITTER BOOK.",
@@ -176,6 +177,22 @@
       }
       return [x, y];
     };
+    // Gram's garden: a 4 x 3 bed in her backyard, or beside her house if that's full
+    const rows = G.tiles.map((r) => [...r]);
+    const [gx, gy] = sp.grams.door;
+    const behind = sp.grams.land[1] < gy ? 3 : -5;   // the house is on the far side of the door from the street
+    let garden = null;
+    for (const [x0, ys] of [[gx - 2, [gy + behind]], [gx - 1, [gy + behind]], [gx - 3, [gy + behind]], [gx + 3, [gy + 1, gy, gy + 2]], [gx - 6, [gy + 1, gy, gy + 2]]]) {
+      for (const y0 of ys) {
+        let fits = true;
+        for (let y = y0; y < y0 + 3; y++) for (let x = x0; x < x0 + 4; x++) if (rows[y]?.[x] !== ",") fits = false;
+        if (fits) { garden = { x0, y0, x1: x0 + 3, y1: y0 + 2 }; break; }
+      }
+      if (garden) break;
+    }
+    if (garden) {
+      for (let y = garden.y0; y <= garden.y1; y++) for (let x = garden.x0; x <= garden.x1; x++) { rows[y][x] = "g"; taken.add(x + "," + y); }
+    }
     const hazel = grassNear(ox - 5, sp.ours.land[1] - 2);
     const pip = grassNear(sp.grams.door[0] + 5, sp.grams.land[1] + 3);
     // the wagon waits on the other side of our driveway from the bike
@@ -187,7 +204,8 @@
       border: "T",
       layout: "osm-2", // change when the map is regenerated, so old saved spots reset
       // the boat starts tied up at the dock; it's an item you can ride, so its tile is water
-      tiles: G.tiles.map((row) => row.replace(/O/g, "~")),
+      tiles: rows.map((row) => row.join("").replace(/O/g, "~")),
+      garden,
       warps: [
         { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 7, ty: 10, dir: "up" },
         { x: sp.grams.door[0], y: sp.grams.door[1], to: "grams", tx: 4, ty: 6, dir: "up" },
@@ -200,15 +218,15 @@
         { x: ox - 14, y: street - 1, look: "friend", dir: "right", wander: true, talk: [
           "Snakes like the tall grass near the creek. Some are really shy!",
         ] },
-        { x: hazel[0], y: hazel[1], look: "squirrel", dir: "right", action: "squirrel", squirrel: "hazel", talk: [
+        { x: hazel[0], y: hazel[1], look: "squirrel", dir: "right", id: "hazel", name: "HAZEL", talk: [
           "HAZEL: Chitter chitter! Winter is coming and my pantry is empty!",
           "Maybe your mom knows how you could help...",
         ] },
-        { x: pip[0], y: pip[1], look: "squirrel", dir: "left", action: "squirrel", squirrel: "pip", talk: [
+        { x: pip[0], y: pip[1], look: "squirrel", dir: "left", id: "pip", name: "PIP", talk: [
           "PIP: Squeak! I'm Pip. I love pecans more than anything!",
           "I bet your dad would have a job for a helper like you.",
         ] },
-        { x: sp.dock.pat[0], y: sp.dock.pat[1], look: "uncle", dir: "down", action: "fishing", talk: [
+        { x: sp.dock.pat[0], y: sp.dock.pat[1], look: "uncle", dir: "down", id: "pat", name: "UNCLE PAT", action: "fishing", talk: [
           "UNCLE PAT: Ahoy there, kiddo! You can take my boat out anytime. Just face it and press A.",
           "Want to go fishing?",
           "First you have to answer my math question!",
@@ -245,7 +263,7 @@
      squirrel to finish. Critters stay away while a quest is on.        */
   const QUESTS = {
     acorns: {
-      title: "Acorns for Hazel", giver: "mom", squirrel: "hazel", squirrelName: "HAZEL",
+      title: "Acorns for Hazel", giver: "mom", to: "hazel", toName: "HAZEL", kind: "collect",
       item: "acorn", items: "acorns", icon: "🌰", need: 8, map: "crescent",
       offer: ["MOM: The squirrels are getting ready for winter, and Hazel's pantry is empty!",
         "Can you find 8 acorns in the yards and bring them to Hazel? She's in the yard down the street."],
@@ -254,7 +272,7 @@
       thanks: ["HAZEL: Chitter chitter! 8 acorns! My pantry is full!", "Thank you, friend! Now I can sleep cozy all winter."],
     },
     nuts: {
-      title: "Pecans for Pip", giver: "dad", squirrel: "pip", squirrelName: "PIP",
+      title: "Pecans for Pip", giver: "dad", to: "pip", toName: "PIP", kind: "collect",
       item: "nut", items: "pecans", icon: "🥜", need: 6, map: "crescent",
       offer: ["DAD: Pip the squirrel lost his pecans all over the neighborhood!",
         "Can you find 6 pecans and bring them back to Pip? He's near Gram's house."],
@@ -262,7 +280,30 @@
       hint: "Pecans fall in the tall grass. Look for the sparkles!",
       thanks: ["PIP: Squeak squeak! My pecans! All 6 of them!", "You're the best helper on Crescent Drive!"],
     },
+    fish: {
+      title: "Fish for Uncle Pat", giver: "pat", to: "pat", toName: "UNCLE PAT", kind: "fish",
+      items: "fish", icon: "🐟", need: 3,
+      offer: ["UNCLE PAT: I'm having a fish fry tonight, but all I've caught is an old boot!",
+        "Can you catch 3 fish for me?"],
+      accept: "UNCLE PAT: That's my fishing buddy! Answer my question and grab a rod.",
+      hint: "Catch them with the fishing rod here on the dock. Boots don't count!",
+      doneBanner: "Tell UNCLE PAT you caught them!",
+      thanks: ["UNCLE PAT: Three fish! That's a fish fry tonight!", "Thanks, kiddo. Bring your little brother, there's plenty to share."],
+    },
+    garden: {
+      title: "Gram's Garden", giver: "gram", to: "gram", toName: "GRAM", kind: "collect",
+      item: "weed", items: "weeds", icon: "🌱", need: 8, map: "crescent", area: "garden", tile: "g", spacing: 1, extra: 0,
+      offer: ["GRAM: Oh, sweetheart, my garden is full of weeds! My flowers can't grow.",
+        "Could you pull 8 weeds for me? The garden is in my backyard, right behind the house."],
+      accept: "GRAM: Bless you! Just walk over each weed to pull it.",
+      hint: "The weeds are in the garden behind Gram's house.",
+      doneSay: "Go tell Gram the garden is all clear!",
+      doneBanner: "Tell GRAM the garden is clear!",
+      thanks: ["GRAM: Look at my garden! Not a weed in sight!", "Now my flowers can grow. Come see them bloom!"],
+    },
   };
+  // what to call each quest giver in "X might have another job for you"
+  const GIVERS = { mom: "Mom", dad: "Dad", gram: "Gram", pat: "Uncle Pat" };
   const QUEST_STARS = 5;
 
   /* ---------- animal facts ----------
@@ -365,5 +406,5 @@
     return { text: `${a} ${op} ${b} = ?`, answer, choices: shuffle([...choices]) };
   }
 
-  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, FACTS, makeQuestion, makeFact };
+  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, FACTS, makeQuestion, makeFact };
 })();

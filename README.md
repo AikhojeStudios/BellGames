@@ -57,7 +57,16 @@ Save drawings as PNG with a transparent background in `assets/adventure/`, then 
 - **Ground tiles**: square pictures by map letter. Give a list to vary them so the ground doesn't look repeated.
 - **Objects** (trees, signs, furniture): by map letter, with a size in tiles. The bottom of the picture sits on its tile.
 
-**Quests:** talk to Mom (in the kitchen) or Dad (in the living room) for a job. *Acorns for Hazel* and *Pecans for Pip* hide items in the tall grass near home; walk over them to collect, then bring them to the squirrel for 5 stars. While a quest is on, wild critters stay away. Quests are data in `QUESTS` in `world.js` (who gives it, the item, how many, the squirrel, and what everyone says), so more are easy to add.
+**Quests:** Mom, Dad, Gram and Uncle Pat each have a job. Finish one for 5 stars; while a quest is on, wild critters stay away.
+
+| Quest | From | What to do |
+|---|---|---|
+| Acorns for Hazel | Mom | Find 8 acorns hidden in the yards, bring them to Hazel the squirrel |
+| Pecans for Pip | Dad | Find 6 pecans, bring them to Pip the squirrel |
+| Gram's Garden | Gram | Pull 8 weeds in the garden behind her house; then it blooms |
+| Fish for Uncle Pat | Uncle Pat | Catch 3 fish with his rod for his fish fry |
+
+Quests are data in `QUESTS` in `world.js`: who gives it (`giver`), who it's handed to (`to`), the `kind` (`collect` items hidden in an area, or `fish` caught when fishing), how many, and what everyone says. Anyone with an `id` on a map can give or receive one.
 
 **Animal facts:** when you meet a critter, questions take turns between math and true facts about that animal (`FACTS` in `world.js`). A wrong answer shows the right one with a short explanation.
 
