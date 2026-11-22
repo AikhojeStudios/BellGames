@@ -70,7 +70,7 @@ Quests are data in `QUESTS` in `world.js`: who gives it (`giver`), who it's hand
 
 **Animal facts:** when you meet a critter, questions take turns between math and true facts about that animal (`FACTS` in `world.js`). A wrong answer shows the right one with a short explanation.
 
-**Our House** is one floor with a kitchen, dining room and living room; each room's name pops up as you walk in (`rooms` on the map).
+**Our House** follows the family's own floor plan: one floor with a living room, kitchen, dining room, study, hallway, three bedrooms (the main one with its own bathroom), a hall bathroom, two closets and a garage with the car. The front door and the garage door both lead out to the driveway. Each room's name pops up as you walk in (`rooms` on the map).
 
 **Wagon:** a red wagon waits by Our House. Press A on it and little brother hops in; push him around (a bit faster than walking) while he cheers in speech bubbles. B parks it where you are; it won't go in water or indoors (it parks outside the door).  Uncle Pat's rowboat is tied up at the end of the dock. Face it and press A to climb in, steer around the water, then face the dock or shore and press B to step out; it stays where you leave it. **Sea routes:** a warp with `byBoat: true` only works when you sail onto it, and your boat comes along to the new map, so new places can be reached by water (there's an example in `world.js`).
 

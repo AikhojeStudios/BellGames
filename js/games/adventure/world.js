@@ -45,6 +45,13 @@
     "g": { ground: "garden" },                 // Gram's garden bed
     "w": { ground: "innerWall", solid: true }, // walls between rooms
     "k": { ground: "kitchen" },                // kitchen floor tiles
+    "q": { ground: "carpet" },                 // bedroom carpet
+    "u": { ground: "bathroom" },               // bathroom tiles
+    "z": { ground: "concrete" },               // garage floor
+    "e": { ground: "floor", object: "desk", solid: true },
+    "j": { ground: "bathroom", object: "toilet", solid: true },
+    "y": { ground: "bathroom", object: "tub", solid: true },
+    "a": { ground: "concrete", object: "car", solid: true },
     "c": { ground: "kitchen", object: "counter", solid: true },
     "v": { ground: "kitchen", object: "stove", solid: true },
     "f": { ground: "kitchen", object: "fridge", solid: true },
@@ -73,39 +80,62 @@
 
   /* ---------- maps ---------- */
   const MAPS = {
-    // Our house: one floor with a kitchen, dining room and living room.
+    // Our house, from the family's own floor plan: one floor, front door at the
+    // bottom (facing Crescent Drive), garage on the right with its own door out.
     home: {
       name: "Our House",
       border: "X",
       indoors: true,
-      layout: "house-2",
+      layout: "house-3",
       tiles: [
-        "HHHHHHHHHHHHHHHH",
-        "IIIIIIIIIIIIIIII",
-        "fcvccw__nnn____P",
-        "kkkkk___KKK_____",
-        "kkkkkw__KKK____P",
-        "kkkkkw__nnn_____",
-        "wwwww_wwwwww_www",
-        "bb____rrrr____tP",
-        "_____rrrrrr_____",
-        "_ooo_rrrrrr_____",
-        "P______________P",
-        "_______M________",
+        "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+        "IIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
+        "qqqqqbwqqqqPwbeebw_____Pfcvccc",
+        "BqqqqqwBqqqqw____w_nnn__kkkkkk",
+        "qqqqqqwqqqqqw____w_KKK__kkkkkk",
+        "Bqqqqqwqqqqqw______nnn__kkkkkk",
+        "qqrrqqwqqqqqw____w______kkkkkk",
+        "qqqqqqwqqqqqw____w______kkkkkk",
+        "www_wwwww_wwwwwwww______wwwwww",
+        "____________________t__Pwzzzzz",
+        "________________________wzzzzb",
+        "www_wwww_wwww_www__rrr__wzzzzb",
+        "qqqqqbwjuuywb__bw_______zzzzzz",
+        "qqBBqqwuuuyw____w__ooo__wzzazz",
+        "qqqqqqwuuuuw____w_______wzzazz",
+        "qqqqqqwuuuuwwwwww_______wzzzzz",
+        "qqqqqqwwwwww____w_______wzzzzz",
+        "qqqqqqwjuuuw____________wzzzzz",
+        "Pqqqqq_uuuyw____wP______wzzzzz",
+        "qqqqqqwuuuywb__bw___M___wzzMzz",
       ],
       rooms: [
-        { name: "Kitchen", x0: 0, y0: 2, x1: 4, y1: 5 },
-        { name: "Dining Room", x0: 5, y0: 2, x1: 15, y1: 5 },
-        { name: "Living Room", x0: 0, y0: 7, x1: 15, y1: 11 },
+        { name: "Bedroom", x0: 0, y0: 2, x1: 5, y1: 7 },
+        { name: "Bedroom", x0: 7, y0: 2, x1: 11, y1: 7 },
+        { name: "Study", x0: 13, y0: 2, x1: 16, y1: 7 },
+        { name: "Kitchen", x0: 24, y0: 2, x1: 29, y1: 7 },
+        { name: "Dining Room", x0: 18, y0: 2, x1: 23, y1: 8 },
+        { name: "Hallway", x0: 0, y0: 9, x1: 16, y1: 10 },
+        { name: "Main Bedroom", x0: 0, y0: 12, x1: 5, y1: 19 },
+        { name: "Bathroom", x0: 7, y0: 12, x1: 10, y1: 15 },
+        { name: "Main Bathroom", x0: 7, y0: 17, x1: 10, y1: 19 },
+        { name: "Closet", x0: 12, y0: 12, x1: 15, y1: 14 },
+        { name: "Closet", x0: 12, y0: 16, x1: 15, y1: 19 },
+        { name: "Living Room", x0: 17, y0: 9, x1: 23, y1: 19 },
+        { name: "Garage", x0: 24, y0: 9, x1: 29, y1: 19 },
       ],
-      warps: [{ x: 7, y: 11, to: "crescent", tx: 0, ty: 0, dir: "down" }], // set by buildCrescent
+      // the front door and the garage door both lead out to our driveway (set by buildCrescent)
+      warps: [
+        { x: 20, y: 19, to: "crescent", tx: 0, ty: 0, dir: "down" },
+        { x: 27, y: 19, to: "crescent", tx: 0, ty: 0, dir: "down" },
+      ],
       people: [
-        { x: 2, y: 4, look: "mom", dir: "down", id: "mom", name: "MOM", talk: [
+        { x: 26, y: 5, look: "mom", dir: "down", id: "mom", name: "MOM", talk: [
           "MOM: Off on a Garter Quest? How exciting!",
           "Your bike is right outside, and your little brother wants a ride in the wagon!",
           "Gram lives just across the street. Be home for dinner!",
         ] },
-        { x: 4, y: 8, look: "dad", dir: "down", id: "dad", name: "DAD", talk: [
+        { x: 22, y: 15, look: "dad", dir: "down", id: "dad", name: "DAD", talk: [
           "DAD: Hey, champ! Uncle Pat says the fish are biting down at the dock.",
           "Critters hide in the tall grass. Answer their questions to make friends!",
         ] },
@@ -165,7 +195,7 @@
       signs.push({ x, y, text: [name.toUpperCase()].concat(extra[name] ? [extra[name]] : []) });
     }
     if (sp.dock.sign) signs.push({ x: sp.dock.sign[0], y: sp.dock.sign[1], text: ["FORBES BAY DOCK", "Uncle Pat's boat is tied up at the end. Take it for a ride!"] });
-    MAPS.home.warps[0].tx = sp.ours.land[0]; MAPS.home.warps[0].ty = sp.ours.land[1];
+    for (const w of MAPS.home.warps) { w.tx = sp.ours.land[0]; w.ty = sp.ours.land[1]; }
     MAPS.grams.warps[0].tx = sp.grams.land[0]; MAPS.grams.warps[0].ty = sp.grams.land[1];
     const ox = sp.ours.door[0];
     // a free tall-grass tile near (x, y), for placing squirrels
@@ -207,7 +237,7 @@
       tiles: rows.map((row) => row.join("").replace(/O/g, "~")),
       garden,
       warps: [
-        { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 7, ty: 10, dir: "up" },
+        { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 20, ty: 18, dir: "up" },
         { x: sp.grams.door[0], y: sp.grams.door[1], to: "grams", tx: 4, ty: 6, dir: "up" },
       ],
       signs,
@@ -380,7 +410,7 @@
   /* What can bite on Uncle Pat's line. More copies = more often. */
   const CATCHES = ["finny", "finny", "finny", "finny", "pinchy", "pinchy", "shelby", "shelby", "bloop", "boot"];
 
-  const START = { map: "home", x: 7, y: 10, dir: "up" };
+  const START = { map: "home", x: 20, y: 18, dir: "up" };
 
   /* ---------- questions, by level ---------- */
   function makeQuestion(mode) {
