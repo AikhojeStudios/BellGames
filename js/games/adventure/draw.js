@@ -1,5 +1,5 @@
 /* =====================================================================
-   Going on an Adventure — drawing
+   Garter Quest — drawing
    Two sources of pictures:
      1. Your hand-drawn PNGs, listed in A.assets below. When a file is
         listed and loads, it is used.
@@ -42,6 +42,8 @@
     objects: {
       // "T": { src: "assets/adventure/tree.png", w: 1.6, h: 2.2 },
       // "bike": { src: "assets/adventure/bike.png", w: 1, h: 0.8 },   // the parked bike
+      // "wagon": { src: "assets/adventure/wagon.png", w: 1, h: 0.8 }, // the parked wagon
+      // "boat": { src: "assets/adventure/boat.png", w: 2, h: 1 },     // the boat (drawn facing right)
     },
   };
 
@@ -197,7 +199,7 @@
       }
     },
     water(c, s, r) {
-      c.fillStyle = C.water; c.fillRect(0, 0, s, s);
+      c.fillStyle = "#5FB2BC"; c.fillRect(0, 0, s, s);
       for (let i = 0; i < 2; i++) line(c, s * r(), s * (0.2 + r() * 0.6), s * r(), s * (0.2 + r() * 0.6), r, s * 0.05, s * 0.03, C.waterLite);
     },
     sand(c, s, r) {
@@ -206,6 +208,9 @@
     },
     dock(c, s, r, same) {
       GROUND.water(c, s, r);
+      GROUND.dockPlanks(c, s, r, same);
+    },
+    dockPlanks(c, s, r, same) {
       const m = s * 0.08;
       const x0 = same(-1, 0) ? 0 : m, x1 = same(1, 0) ? s : s - m;
       const y0 = same(0, -1) ? 0 : m, y1 = same(0, 1) ? s : s - m;
@@ -265,7 +270,59 @@
       blob(c, rectPts(s * 0.12, s * 0.2, s * 0.76, s * 0.55), r, s * 0.03); paint(c, "#6F9BC9", s * 0.035);
     },
     void(c, s) { c.fillStyle = C.dark; c.fillRect(0, 0, s, s); },
+    garden(c, s, r, same) { gardenBed(c, s, r, same, false); },
+    gardenBloom(c, s, r, same) { gardenBed(c, s, r, same, true); },
+    kitchen(c, s) {
+      const n = 4, q = s / n;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        c.fillStyle = (x + y) % 2 ? "#DCEBF2" : "#FFFFFF"; c.fillRect(x * q, y * q, q, q);
+      }
+    },
+    /** A wall between rooms, seen from above, with its face showing on the south side. */
+    innerWall(c, s, r, same) {
+      c.fillStyle = "#CDB892"; c.fillRect(0, 0, s, s);
+      if (!same(0, 1)) {
+        c.fillStyle = "#EADFC6"; c.fillRect(0, s * 0.55, s, s * 0.45);
+        c.fillStyle = C.base; c.fillRect(0, s * 0.9, s, s * 0.1);
+      }
+      c.strokeStyle = C.ink; c.lineWidth = s * 0.04;
+      c.beginPath();
+      if (!same(0, -1)) { c.moveTo(0, s * 0.02); c.lineTo(s, s * 0.02); }
+      if (!same(-1, 0)) { c.moveTo(s * 0.02, 0); c.lineTo(s * 0.02, s); }
+      if (!same(1, 0)) { c.moveTo(s * 0.98, 0); c.lineTo(s * 0.98, s); }
+      if (!same(0, 1)) { c.moveTo(0, s * 0.55); c.lineTo(s, s * 0.55); }
+      c.stroke();
+    },
   };
+
+  /** Soil in rows with a wooden edge; when it blooms, flowers grow in the rows. */
+  function gardenBed(c, s, r, same, bloom) {
+    c.fillStyle = "#8B5E3C"; c.fillRect(0, 0, s, s);
+    c.strokeStyle = "#6E4A2E"; c.lineWidth = s * 0.05;
+    for (let y = s * 0.2; y < s; y += s * 0.3) { c.beginPath(); c.moveTo(0, y); c.lineTo(s, y + (r() - 0.5) * s * 0.04); c.stroke(); }
+    if (bloom) {
+      const colors = ["#F28DA8", "#F7D35C", "#FFFFFF", "#C69CF0", "#FF7A59"];
+      for (let i = 0; i < 4; i++) {
+        const x = s * (0.15 + (i % 2) * 0.45 + r() * 0.2), y = s * (0.2 + Math.floor(i / 2) * 0.45 + r() * 0.1);
+        line(c, x, y + s * 0.18, x, y, r, 0, s * 0.04, "#4F8C3B");
+        ellipse(c, x + s * 0.06, y + s * 0.1, s * 0.06, s * 0.03, 0.5); paint(c, "#62A24C");
+        const col = colors[Math.floor(r() * colors.length)];
+        for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2; ellipse(c, x + Math.cos(a) * s * 0.06, y + Math.sin(a) * s * 0.06, s * 0.05, s * 0.05); paint(c, col); }
+        ellipse(c, x, y, s * 0.035, s * 0.035); paint(c, "#E2A33B");
+      }
+    } else {
+      for (let i = 0; i < 3; i++) {
+        const x = s * (0.2 + r() * 0.6), y = s * (0.25 + r() * 0.6);
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x - s * 0.04, y - s * 0.06); c.moveTo(x, y); c.lineTo(x + s * 0.04, y - s * 0.06); ink(c, s * 0.03, "#7FB455");
+      }
+    }
+    c.fillStyle = "#A4774A";
+    const e = s * 0.07;
+    if (!same(0, -1)) c.fillRect(0, 0, s, e);
+    if (!same(0, 1)) c.fillRect(0, s - e, s, e);
+    if (!same(-1, 0)) c.fillRect(0, 0, e, s);
+    if (!same(1, 0)) c.fillRect(s - e, 0, e, s);
+  }
 
   /* ---------- objects (stand up off the ground; may spill over the tile above) ----------
      Drawn into a canvas 2 tiles wide and 2.5 tiles tall; the tile itself is at
@@ -347,6 +404,53 @@
       line(c, -s * 0.34, s * 0.8, s * 0.88, s * 0.84, r, s * 0.01, s * 0.05, "#D9433B");
       line(c, -s * 0.42, s * 0.56, -s * 0.9, s * 0.4, r, s * 0.02, s * 0.025, "#8A6A4A");
     },
+    counter(c, s, r, same) {
+      const x0 = same(-1, 0) ? -1 : s * 0.02, x1 = same(1, 0) ? s + 1 : s * 0.98;
+      c.fillStyle = "#B99A72"; c.fillRect(x0, s * 0.55, x1 - x0, s * 0.4);
+      c.fillStyle = "#EFE9DE"; c.fillRect(x0, s * 0.05, x1 - x0, s * 0.55);
+      c.strokeStyle = C.ink; c.lineWidth = s * 0.04; c.strokeRect(x0, s * 0.05, x1 - x0, s * 0.9);
+      c.beginPath(); c.moveTo(x0, s * 0.6); c.lineTo(x1, s * 0.6); c.stroke();
+      ellipse(c, s * 0.5, s * 0.78, s * 0.06, s * 0.03); paint(c, "#7A5634");
+    },
+    stove(c, s, r, same) {
+      OBJECTS.counter(c, s, r, same);
+      c.fillStyle = "#3A3330"; c.fillRect(s * 0.12, s * 0.1, s * 0.76, s * 0.45);
+      [[0.32, 0.22], [0.68, 0.22], [0.32, 0.44], [0.68, 0.44]].forEach(([x, y]) => { ellipse(c, s * x, s * y, s * 0.1, s * 0.06); ink(c, s * 0.03, "#E25636"); });
+    },
+    fridge(c, s) {
+      c.beginPath(); c.roundRect(s * 0.08, -s * 0.45, s * 0.84, s * 1.38, s * 0.08); paint(c, "#F4F6F8", s * 0.045);
+      c.beginPath(); c.moveTo(s * 0.08, s * 0.1); c.lineTo(s * 0.92, s * 0.1); ink(c, s * 0.035);
+      c.beginPath(); c.moveTo(s * 0.78, -s * 0.3); c.lineTo(s * 0.78, -s * 0.05); c.moveTo(s * 0.78, s * 0.2); c.lineTo(s * 0.78, s * 0.55); ink(c, s * 0.05, "#9AA4AE");
+      ellipse(c, s * 0.3, -s * 0.2, s * 0.06, s * 0.06); paint(c, "#F28DA8");
+    },
+    chair(c, s) {
+      c.beginPath(); c.roundRect(s * 0.25, s * 0.15, s * 0.5, s * 0.18, s * 0.05); paint(c, "#A4774A", s * 0.035);
+      c.beginPath(); c.roundRect(s * 0.22, s * 0.32, s * 0.56, s * 0.4, s * 0.06); paint(c, "#C99A6B", s * 0.035);
+      c.fillStyle = "#7A5634"; c.fillRect(s * 0.26, s * 0.72, s * 0.06, s * 0.2); c.fillRect(s * 0.68, s * 0.72, s * 0.06, s * 0.2);
+    },
+    sofa(c, s, r, same) {
+      const x0 = same(-1, 0) ? -1 : s * 0.04, x1 = same(1, 0) ? s + 1 : s * 0.96;
+      c.fillStyle = "#5E7FBF"; c.fillRect(x0, s * 0.05, x1 - x0, s * 0.4);
+      c.fillStyle = "#7C9BD6"; c.fillRect(x0, s * 0.42, x1 - x0, s * 0.45);
+      c.strokeStyle = C.ink; c.lineWidth = s * 0.04; c.strokeRect(x0, s * 0.05, x1 - x0, s * 0.82);
+      if (!same(-1, 0)) { c.beginPath(); c.roundRect(x0 - s * 0.02, s * 0.2, s * 0.16, s * 0.7, s * 0.06); paint(c, "#5E7FBF", s * 0.04); }
+      if (!same(1, 0)) { c.beginPath(); c.roundRect(x1 - s * 0.14, s * 0.2, s * 0.16, s * 0.7, s * 0.06); paint(c, "#5E7FBF", s * 0.04); }
+    },
+    tv(c, s) {
+      c.fillStyle = "#7A5634"; c.fillRect(s * 0.1, s * 0.55, s * 0.8, s * 0.35);
+      c.beginPath(); c.roundRect(s * 0.06, -s * 0.15, s * 0.88, s * 0.66, s * 0.04); paint(c, "#26262B", s * 0.04);
+      const g = c.createLinearGradient(0, -s * 0.1, 0, s * 0.45); g.addColorStop(0, "#5EC2E8"); g.addColorStop(1, "#7C5CD6");
+      c.fillStyle = g; c.fillRect(s * 0.13, -s * 0.08, s * 0.74, s * 0.52);
+    },
+    shelf(c, s) {
+      c.beginPath(); c.roundRect(s * 0.06, -s * 0.5, s * 0.88, s * 1.4, s * 0.04); paint(c, "#A4774A", s * 0.045);
+      const cols = ["#D9433B", "#4F86B0", "#F2B544", "#62A24C", "#7C5CD6"];
+      for (let row = 0; row < 3; row++) {
+        const y = -s * 0.42 + row * s * 0.44;
+        c.fillStyle = "#7A5634"; c.fillRect(s * 0.1, y + s * 0.36, s * 0.8, s * 0.04);
+        for (let i = 0; i < 5; i++) { c.fillStyle = cols[(i + row) % 5]; c.fillRect(s * (0.14 + i * 0.15), y + s * (0.08 + (i % 2) * 0.04), s * 0.11, s * (0.28 - (i % 2) * 0.04)); }
+      }
+    },
     bed(c, s, r) {
       blob(c, rectPts(s * 0.08, s * 0.02, s * 0.84, s * 0.94), r, s * 0.03); paint(c, "#8DB8E0", s * 0.04);
       blob(c, rectPts(s * 0.18, s * 0.08, s * 0.64, s * 0.24), r, s * 0.03); paint(c, "#FFFFFF", s * 0.035);
@@ -365,6 +469,94 @@
       });
     },
   };
+
+  /* ---------- water ----------
+     One painted texture that repeats seamlessly, shared by every water tile,
+     so the bay looks like one body of water instead of a grid of squares.
+     Teal base, soft light patches, long pointed streaks, white curls and
+     sparkles. A second layer with only the shine drifts the other way.    */
+  const WATER = { w: 640, h: 384 };
+  const waterCache = {};
+  function waterTextures(dpr) {
+    if (waterCache[dpr]) return waterCache[dpr];
+    const make = (paintIt) => {
+      const cv = document.createElement("canvas");
+      cv.width = WATER.w * dpr; cv.height = WATER.h * dpr;
+      const c = cv.getContext("2d");
+      c.scale(dpr, dpr);
+      paintIt(c);
+      return cv;
+    };
+    // draw a shape nine times so it wraps around every edge
+    const wrapped = (c, fn) => {
+      for (const dx of [-WATER.w, 0, WATER.w]) for (const dy of [-WATER.h, 0, WATER.h]) {
+        c.save(); c.translate(dx, dy); fn(); c.restore();
+      }
+    };
+    const lens = (c, x, y, rx, ry) => {
+      c.beginPath(); c.moveTo(x - rx, y);
+      c.quadraticCurveTo(x, y - ry, x + rx, y); c.quadraticCurveTo(x, y + ry, x - rx, y); c.closePath();
+    };
+    const base = make((c) => {
+      const r = rng(2024);
+      c.fillStyle = "#5FB2BC"; c.fillRect(0, 0, WATER.w, WATER.h);
+      for (let i = 0; i < 6; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, rad = 110 + r() * 170;
+        wrapped(c, () => {
+          const g = c.createRadialGradient(x, y, 0, x, y, rad);
+          g.addColorStop(0, "rgba(165,228,216,.55)"); g.addColorStop(1, "rgba(165,228,216,0)");
+          c.fillStyle = g; c.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+        });
+      }
+      const tones = ["rgba(58,136,162,.42)", "rgba(140,214,207,.45)", "rgba(72,152,173,.35)", "rgba(176,231,222,.38)", "rgba(48,121,150,.32)"];
+      for (let i = 0; i < 80; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, rx = 40 + r() * 230, ry = 2.5 + r() * 8, col = tones[i % tones.length];
+        wrapped(c, () => { lens(c, x, y, rx, ry); c.fillStyle = col; c.fill(); });
+      }
+    });
+    const shine = make((c) => {
+      const r = rng(77);
+      c.strokeStyle = "rgba(255,255,255,.8)"; c.lineCap = "round"; c.lineWidth = 1.6;
+      for (let i = 0; i < 16; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, len = 40 + r() * 120, amp = 2 + r() * 4, waves = 1 + Math.floor(r() * 3);
+        wrapped(c, () => {
+          c.beginPath();
+          for (let k = 0; k <= 24; k++) {
+            const px = x + (k / 24) * len, py = y + Math.sin((k / 24) * Math.PI * 2 * waves) * amp * (1 - k / 48);
+            if (k) c.lineTo(px, py); else c.moveTo(px, py);
+          }
+          c.stroke();
+        });
+      }
+      for (let i = 0; i < 6; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, rad = 6 + r() * 6;
+        wrapped(c, () => { c.beginPath(); c.arc(x, y, rad, Math.PI * 0.55, Math.PI * 1.45); c.stroke(); });
+      }
+      c.fillStyle = "rgba(255,255,255,.85)";
+      for (let i = 0; i < 22; i++) {
+        const x = r() * WATER.w, y = r() * WATER.h, w = 2 + r() * 3;
+        wrapped(c, () => { c.beginPath(); c.ellipse(x, y, w, w * 0.4, 0, 0, Math.PI * 2); c.fill(); });
+      }
+    });
+    return (waterCache[dpr] = { base, shine });
+  }
+
+  /**
+   * Paint water inside a path. (ox, oy) is the world position of the
+   * screen's top-left, so the texture lines up across every tile.
+   */
+  function water(c, dpr, path, ox, oy, t) {
+    const tex = waterTextures(dpr);
+    const at = (dx, dy) => new DOMMatrix().translate(dx, dy).scale(1 / dpr);
+    const base = c.createPattern(tex.base, "repeat");
+    base.setTransform(at(-ox + t * 5, -oy));
+    c.fillStyle = base; c.fill(path);
+    const shine = c.createPattern(tex.shine, "repeat");
+    shine.setTransform(at(-ox - t * 7, -oy + Math.sin(t * 0.6) * 3));
+    c.globalAlpha = 0.6 + Math.sin(t * 1.4) * 0.25;
+    c.fillStyle = shine; c.fill(path);
+    c.globalAlpha = 1;
+  }
 
   /* ---------- caches: each tile look is drawn once per size ---------- */
   const cache = new Map();
@@ -416,10 +608,13 @@
 
   /* ---------- people ---------- */
   const LOOKS = {
-    hero: { shirt: "#E8604C", pants: "#3E5C8A", skin: "#F2C49B", hair: "#5A3A26", cap: "#2F7FC1", pack: "#F2B544" },
+    // the hero: white tee with a print on the back, green shorts, braids
+    hero: { shirt: "#F3F1EA", pants: "#2F7A4F", skin: "#6E4128", hair: "#1C1310", braids: true, shorts: true, print: "#9A9A96" },
     friend: { shirt: "#7CC47F", pants: "#6B5B95", skin: "#C98E63", hair: "#2B1D14", bow: "#F28DA8" },
-    mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#E8B48A", hair: "#7A4B2A", long: true },
-    elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#F0C8A8", hair: "#E8E4DC", glasses: true },
+    brother: { shirt: "#F3F1EA", pants: "#3D4F7A", skin: "#7A4A2E", hair: "#1C1310", braids: true, shorts: true },
+    mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#7A4A2E", hair: "#1C1310", long: true },
+    dad: { shirt: "#3E6E9E", pants: "#4A4A55", skin: "#6E4128", hair: "#1C1310", beard: true },
+    elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#7A4A2E", hair: "#E8E4DC", glasses: true },
     uncle: { shirt: "#4F86B0", pants: "#6B5B4B", skin: "#E0AC85", hair: "#8B5A2B", hat: "#C9B27C", beard: true },
   };
 
@@ -449,6 +644,7 @@
     const sheet = A.assets.people[look];
     const im = sheet && img(sheet.src);
     if (im) return personSheet(c, sheet, im, dir, cx, foot, s, phase);
+    if (look === "squirrel") return squirrel(c, dir, cx, foot, s, t);
 
     const L = LOOKS[look] || LOOKS.friend;
     const u = s / 16;
@@ -462,14 +658,19 @@
     ellipse(c, cx, foot, 5 * u, 1.6 * u); paint(c, "rgba(0,0,0,.16)");
     // legs
     const legTop = foot - 5.5 * u;
+    // a leg: shorts show skin below them
+    const leg = (x, y) => {
+      if (L.shorts) {
+        c.beginPath(); c.roundRect(x, y, 2.6 * u, 5.5 * u, u); paint(c, L.skin, lw);
+        c.beginPath(); c.roundRect(x - 0.2 * u, y - 0.2 * u, 3 * u, 2.6 * u, 0.8 * u); paint(c, L.pants, lw);
+      } else { c.beginPath(); c.roundRect(x, y, 2.6 * u, 5.5 * u, u); paint(c, L.pants, lw); }
+    };
     if (side) {
-      for (const k of [-1, 1]) {
-        c.beginPath(); c.roundRect(cx - 1.3 * u + swing * k * 1.8 * u, legTop, 2.6 * u, 5.5 * u, u); paint(c, L.pants, lw);
-      }
+      for (const k of [-1, 1]) leg(cx - 1.3 * u + swing * k * 1.8 * u, legTop);
     } else {
       [-1, 1].forEach((k) => {
         const lift = Math.max(0, swing * k) * 1.4 * u;
-        c.beginPath(); c.roundRect(cx + k * 2.1 * u - 1.3 * u, legTop - lift, 2.6 * u, 5.5 * u, u); paint(c, L.pants, lw);
+        leg(cx + k * 2.1 * u - 1.3 * u, legTop - lift);
       });
     }
     // backpack behind (side and front views)
@@ -478,6 +679,15 @@
     // body
     c.beginPath(); c.roundRect(cx - (side ? 3.4 : 4.4) * u, bodyTop, (side ? 6.8 : 8.8) * u, 7.2 * u, 2.2 * u); paint(c, L.shirt, lw);
     if (L.pack && dir === "up") { c.beginPath(); c.roundRect(cx - 3 * u, bodyTop + 0.8 * u, 6 * u, 5.4 * u, 1.4 * u); paint(c, L.pack, lw); }
+    if (L.print && dir === "up") {
+      // the print on the back of the tee: a hoop and net
+      c.strokeStyle = L.print; c.lineWidth = Math.max(1, lw * 0.6);
+      c.beginPath(); c.ellipse(cx, bodyTop + 2.4 * u, 2.1 * u, 1.2 * u, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath();
+      for (const k of [-1.6, -0.5, 0.5, 1.6]) { c.moveTo(cx + k * u, bodyTop + 3.2 * u); c.lineTo(cx + k * 0.6 * u, bodyTop + 5.4 * u); }
+      c.moveTo(cx - 1.4 * u, bodyTop + 4.3 * u); c.lineTo(cx + 1.4 * u, bodyTop + 4.3 * u);
+      c.stroke();
+    }
     // arms
     if (!side) {
       [-1, 1].forEach((k) => {
@@ -507,6 +717,7 @@
         c.beginPath(); c.ellipse(side ? cx - 1.2 * u : cx, hy + 2.2 * u, side ? 3 * u : 3.8 * u, 2.4 * u, 0, 0, Math.PI); c.closePath(); paint(c, L.hair, lw);
       }
       if (L.bow) { ellipse(c, cx + 3.4 * u, hy - 3.6 * u, 1.6 * u, 1.1 * u, 0.5); paint(c, L.bow, lw); }
+      if (L.braids) braids(c, L, cx, hy, u, lw, dir);
       // face
       const blink = Math.floor((t + cx * 0.01) * 10) % 37 === 0;
       const eyes = side ? [cx - 2.2 * u] : [cx - 1.7 * u, cx + 1.7 * u];
@@ -522,11 +733,99 @@
       c.beginPath(); c.arc(side ? cx - 2.6 * u : cx, hy + 1.8 * u, 1.2 * u, 0.15 * Math.PI, 0.85 * Math.PI); ink(c, lw * 0.9);
     } else if (L.cap) {
       c.beginPath(); c.ellipse(cx, hy - 1 * u, 4.6 * u, 3.4 * u, 0, Math.PI, Math.PI * 2); paint(c, L.cap, lw);
+    } else if (L.braids) {
+      braids(c, L, cx, hy, u, lw, dir);
     } else if (L.hat) {
       ellipse(c, cx, hy - 2.4 * u, 6.2 * u, 1.6 * u); paint(c, L.hat, lw);
       c.beginPath(); c.ellipse(cx, hy - 2.6 * u, 3.8 * u, 3 * u, 0, Math.PI, Math.PI * 2); c.closePath(); paint(c, L.hat, lw);
     }
     c.restore();
+  }
+
+  /** A squirrel with a big bushy tail, holding an acorn. */
+  function squirrel(c, dir, cx, foot, s, t) {
+    const u = s / 16, lw = Math.max(1.3, u * 0.6);
+    const k = dir === "left" ? -1 : 1;              // which way it's looking
+    const flick = Math.max(0, Math.sin(t * 2.3)) ** 6 * 0.35;
+    ellipse(c, cx, foot, 4 * u, 1.3 * u); paint(c, "rgba(0,0,0,.16)");
+    // tail: a big curl behind
+    c.save(); c.translate(cx - k * 2.5 * u, foot - 3 * u); c.rotate(-k * flick);
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.bezierCurveTo(-k * 6 * u, -1 * u, -k * 6 * u, -10 * u, -k * 1 * u, -11 * u);
+    c.bezierCurveTo(k * 2 * u, -11.5 * u, k * 1.5 * u, -8 * u, -k * 1 * u, -8 * u);
+    c.bezierCurveTo(-k * 3 * u, -6 * u, -k * 2 * u, -2 * u, k * 1 * u, -1 * u);
+    c.closePath(); paint(c, "#B8743F", lw);
+    c.beginPath(); c.moveTo(-k * 1 * u, -2 * u); c.quadraticCurveTo(-k * 4.5 * u, -6 * u, -k * 1 * u, -9.5 * u); ink(c, lw, "#D9A06B");
+    c.restore();
+    // body, belly and paws holding an acorn
+    ellipse(c, cx, foot - 3.5 * u, 3.2 * u, 3.6 * u); paint(c, "#A9663A", lw);
+    ellipse(c, cx + k * 0.6 * u, foot - 3 * u, 1.8 * u, 2.4 * u); paint(c, "#F2D9B8");
+    ellipse(c, cx + k * 1.4 * u, foot - 4.2 * u, 1.2 * u, 1.4 * u); paint(c, "#B07A45", lw * 0.7);
+    c.beginPath(); c.arc(cx + k * 1.4 * u, foot - 5 * u, 1.2 * u, Math.PI, Math.PI * 2); paint(c, "#6E4A2A", lw * 0.6);
+    // head and ears
+    const hy = foot - 8 * u;
+    [-1, 1].forEach((e) => { c.beginPath(); c.moveTo(cx + e * 1.2 * u, hy - 1.8 * u); c.lineTo(cx + e * 1.9 * u, hy - 3.6 * u); c.lineTo(cx + e * 2.4 * u, hy - 1.2 * u); c.closePath(); paint(c, "#A9663A", lw); });
+    ellipse(c, cx, hy, 2.7 * u, 2.4 * u); paint(c, "#A9663A", lw);
+    ellipse(c, cx + k * 1.6 * u, hy + 0.6 * u, 1.3 * u, 0.9 * u); paint(c, "#F2D9B8");
+    const blink = Math.floor((t + cx * 0.01) * 10) % 41 === 0;
+    [-0.6, 1].forEach((e) => {
+      const ex = cx + k * e * u;
+      if (blink) { c.beginPath(); c.moveTo(ex - 0.5 * u, hy - 0.2 * u); c.lineTo(ex + 0.5 * u, hy - 0.2 * u); ink(c, lw * 0.8); }
+      else { ellipse(c, ex, hy - 0.2 * u, 0.55 * u, 0.7 * u); paint(c, C.ink); }
+    });
+    ellipse(c, cx + k * 2.5 * u, hy + 0.3 * u, 0.5 * u, 0.4 * u); paint(c, C.ink);
+  }
+
+  /** Something to collect on a quest, glinting in the grass. (cx, cy) is its middle. */
+  function pickup(c, kind, cx, cy, s, t) {
+    const pic = A.assets.objects[kind];
+    const im = pic && img(pic.src);
+    const bob = Math.sin(t * 3 + cx * 0.05) * s * 0.03;
+    const lw = Math.max(1.3, s * 0.035);
+    ellipse(c, cx, cy + s * 0.2, s * 0.16, s * 0.05); paint(c, "rgba(0,0,0,.18)");
+    if (im) { const w = s * (pic.w || 0.4), hh = s * (pic.h || 0.4); c.drawImage(im, cx - w / 2, cy - hh / 2 + bob, w, hh); }
+    else if (kind === "weed") {
+      const sway = Math.sin(t * 2 + cx) * s * 0.03;
+      for (const [a, len] of [[-0.6, 0.22], [-0.2, 0.3], [0.25, 0.26], [0.65, 0.2]]) {
+        c.beginPath(); c.moveTo(cx, cy + s * 0.18);
+        c.quadraticCurveTo(cx + a * s * 0.15 + sway, cy, cx + a * s * 0.3 + sway, cy + s * 0.18 - len * s);
+        ink(c, s * 0.05, "#4F8C3B");
+      }
+      ellipse(c, cx + s * 0.05 + sway, cy - s * 0.12, s * 0.06, s * 0.06); paint(c, "#F7D35C", lw * 0.6);
+    }
+    else if (kind === "acorn") {
+      ellipse(c, cx, cy + s * 0.04 + bob, s * 0.13, s * 0.16); paint(c, "#C98B4B", lw);
+      c.beginPath(); c.arc(cx, cy - s * 0.04 + bob, s * 0.15, Math.PI * 1.02, Math.PI * 1.98); c.closePath(); paint(c, "#7A5634", lw);
+      c.beginPath(); c.moveTo(cx, cy - s * 0.18 + bob); c.lineTo(cx + s * 0.04, cy - s * 0.25 + bob); ink(c, lw, "#5A3D22");
+    } else {
+      ellipse(c, cx, cy + bob, s * 0.17, s * 0.11, -0.3); paint(c, "#B5733D", lw);
+      c.beginPath(); c.moveTo(cx - s * 0.12, cy + s * 0.04 + bob); c.quadraticCurveTo(cx, cy - s * 0.04 + bob, cx + s * 0.12, cy - s * 0.06 + bob); ink(c, lw * 0.8, "#7A4A22");
+    }
+    // a twinkle so it's easy to spot
+    const tw = (Math.sin(t * 4 + cx * 0.1) + 1) / 2;
+    if (tw > 0.5) {
+      const r = s * 0.1 * tw, x = cx + s * 0.16, y = cy - s * 0.2 + bob;
+      c.fillStyle = `rgba(255,250,210,${tw})`;
+      c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * 0.3, y - r * 0.3); c.lineTo(x + r, y); c.lineTo(x + r * 0.3, y + r * 0.3);
+      c.lineTo(x, y + r); c.lineTo(x - r * 0.3, y + r * 0.3); c.lineTo(x - r, y); c.lineTo(x - r * 0.3, y - r * 0.3); c.closePath(); c.fill();
+    }
+  }
+
+  /** Cornrow braids running back over the head, gathered into a little puff. */
+  function braids(c, L, cx, hy, u, lw, dir) {
+    const side = dir === "left" || dir === "right";
+    // side views are always drawn facing left (person() mirrors the canvas for right)
+    if (dir === "up") { ellipse(c, cx, hy + 2.8 * u, 1.9 * u, 2 * u); paint(c, L.hair, lw); }
+    else if (side) { ellipse(c, cx + 4.4 * u, hy + 0.6 * u, 1.7 * u, 1.9 * u); paint(c, L.hair, lw); }
+    c.strokeStyle = "rgba(255,255,255,.22)"; c.lineWidth = Math.max(1, lw * 0.55); c.lineCap = "round";
+    for (const k of [-2.2, -0.7, 0.8, 2.3]) {
+      c.beginPath();
+      if (dir === "up") { c.moveTo(cx + k * u, hy - 4 * u); c.quadraticCurveTo(cx + k * 1.15 * u, hy - 1 * u, cx + k * 0.5 * u, hy + 2.2 * u); }
+      else if (side) { c.moveTo(cx - 2.5 * u, hy - 3.8 * u + k * 0.45 * u); c.quadraticCurveTo(cx, hy - 4.6 * u + k * 0.5 * u, cx + 3.6 * u, hy - 1.6 * u + k * 0.5 * u); }
+      else { c.moveTo(cx + k * u, hy - 1.2 * u); c.quadraticCurveTo(cx + k * 1.1 * u, hy - 3.6 * u, cx + k * 0.8 * u, hy - 4.3 * u); }
+      c.stroke();
+    }
   }
 
   function personSheet(c, sheet, im, dir, cx, foot, s, phase) {
@@ -795,6 +1094,104 @@
     }
   }
 
+  /**
+   * The rowboat, centred at (cx, cy) on the water, pointing the way it's facing.
+   * Side views show the whole hull; up and down show it end-on (shorter, wider).
+   */
+  function boat(c, cx, cy, s, dir, t, occupied) {
+    const pic = A.assets.objects.boat;
+    const im = pic && img(pic.src);
+    const lw = Math.max(1.5, s * 0.045);
+    c.save();
+    c.translate(cx, cy);
+    // a soft shadow ring on the water
+    c.fillStyle = "rgba(20,70,90,.22)";
+    c.beginPath(); c.ellipse(0, s * 0.18, s * 0.95, s * 0.32, 0, 0, Math.PI * 2); c.fill();
+    if (dir === "up" || dir === "down") c.rotate(dir === "up" ? -Math.PI / 2 : Math.PI / 2);
+    else if (dir === "left") c.scale(-1, 1);
+    if (dir === "up" || dir === "down") c.scale(0.8, 1.1);
+    if (im) {
+      const w = (pic.w || 2) * s, hh = (pic.h || 1) * s;
+      c.drawImage(im, -w / 2, -hh / 2, w, hh);
+      c.restore();
+      return;
+    }
+    const r = rng(5);
+    const hull = [[-0.85, -0.28], [0.4, -0.3], [0.88, 0], [0.4, 0.3], [-0.85, 0.28], [-0.92, 0]].map(([x, y]) => [x * s, y * s]);
+    blob(c, hull, r, s * 0.015); paint(c, "#F4EFE4", lw);
+    const inner = [[-0.75, -0.19], [0.36, -0.21], [0.7, 0], [0.36, 0.21], [-0.75, 0.19]].map(([x, y]) => [x * s, y * s]);
+    blob(c, inner, r, s * 0.015); paint(c, "#C99A6B", lw * 0.7);
+    if (!occupied) {
+      line(c, -0.35 * s, -0.2 * s, -0.35 * s, 0.2 * s, r, s * 0.01, s * 0.06, "#A4774A");
+      line(c, 0.15 * s, -0.21 * s, 0.15 * s, 0.21 * s, r, s * 0.01, s * 0.06, "#A4774A");
+    } else {
+      // oars dipping in time
+      const sw = Math.sin(t * 4) * 0.25;
+      for (const k of [-1, 1]) {
+        c.beginPath(); c.moveTo(-0.1 * s, k * 0.22 * s); c.lineTo((-0.1 + sw) * s, k * 0.7 * s);
+        ink(c, s * 0.05, "#8A6A4A");
+        ellipse(c, (-0.1 + sw) * s, k * 0.72 * s, s * 0.09, s * 0.05, sw); paint(c, "#A4774A", lw * 0.6);
+      }
+    }
+    line(c, -0.86 * s, 0.24 * s, 0.4 * s, 0.27 * s, r, s * 0.01, s * 0.045, "#D9433B");
+    c.restore();
+  }
+
+  /* ---------- the wagon ---------- */
+  function wheel(c, x, y, r, spin, lw) {
+    ellipse(c, x, y, r, r); paint(c, "#2B2B30", lw);
+    ellipse(c, x, y, r * 0.62, r * 0.62); paint(c, "#F7F7F2", lw * 0.6);
+    c.strokeStyle = "#C9C9C2"; c.lineWidth = Math.max(1, lw * 0.6);
+    for (let i = 0; i < 3; i++) {
+      const a = spin + i * 2.094;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55); c.stroke();
+    }
+    ellipse(c, x, y, r * 0.17, r * 0.17); paint(c, "#D9433B");
+  }
+
+  /**
+   * A red wagon whose wheels rest on y = gy, centred on cx, facing dir.
+   * rider: draw little brother sitting inside. grip: [x, y] of the pusher's
+   * hands, so the handle reaches them.
+   */
+  function wagon(c, cx, gy, s, dir, t, phase, rider, grip) {
+    const pic = A.assets.objects.wagon;
+    const im = pic && !rider && img(pic.src);
+    if (im) { const w = (pic.w || 1) * s, hh = (pic.h || 0.8) * s; c.drawImage(im, cx - w / 2, gy - hh, w, hh); return; }
+    const lw = Math.max(1.4, s * 0.04);
+    const side = dir === "left" || dir === "right", k = dir === "left" ? -1 : 1;
+    const spin = (phase || 0) * Math.PI * 4 * k;
+    ellipse(c, cx, gy, side ? s * 0.5 : s * 0.38, s * 0.09); paint(c, "rgba(0,0,0,.16)");
+    const W = side ? s * 0.88 : s * 0.64;
+    const top = gy - s * 0.62, lip = gy - s * 0.42, bottom = gy - s * 0.14;
+    // wheels on the far side
+    if (side) { wheel(c, cx - s * 0.27, gy - s * 0.2, s * 0.1, spin, lw); wheel(c, cx + s * 0.27, gy - s * 0.2, s * 0.1, spin, lw); }
+    else { wheel(c, cx - W / 2 + s * 0.05, gy - s * 0.36, s * 0.085, spin, lw); wheel(c, cx + W / 2 - s * 0.05, gy - s * 0.36, s * 0.085, spin, lw); }
+    // the inside of the tub
+    c.beginPath(); c.roundRect(cx - W / 2, top, W, lip - top + s * 0.05, s * 0.07); paint(c, "#A42A26", lw);
+    c.fillStyle = "#6E6A72"; c.fillRect(cx - W / 2 + s * 0.06, top + s * 0.05, W - s * 0.12, s * 0.06);
+    // little brother, sitting in the wagon
+    if (rider) {
+      c.save(); c.beginPath(); c.rect(cx - s * 2, gy - s * 3, s * 4, s * 3 - (gy - lip) + s * 0.03); c.clip();
+      person(c, "brother", dir, cx + (side ? -k * s * 0.05 : 0), lip + s * 0.42, s * 0.82, null, t);
+      c.restore();
+    }
+    // the front panel
+    c.beginPath(); c.roundRect(cx - W / 2, lip, W, bottom - lip, s * 0.05); paint(c, "#DB3B33", lw);
+    c.fillStyle = "rgba(255,255,255,.28)"; c.fillRect(cx - W / 2 + s * 0.07, lip + s * 0.05, W - s * 0.14, s * 0.035);
+    // wheels on the near side
+    if (side) { wheel(c, cx - s * 0.27, gy - s * 0.1, s * 0.14, spin, lw); wheel(c, cx + s * 0.27, gy - s * 0.1, s * 0.14, spin, lw); }
+    else { wheel(c, cx - W / 2 + s * 0.03, gy - s * 0.09, s * 0.12, spin, lw); wheel(c, cx + W / 2 - s * 0.03, gy - s * 0.09, s * 0.12, spin, lw); }
+    // the handle, reaching back to whoever is pushing
+    if (grip) {
+      const ax = side ? cx - k * W / 2 : cx, ay = side ? lip : dir === "down" ? top + s * 0.05 : bottom;
+      c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo((ax + grip[0]) / 2, Math.min(ay, grip[1]) - s * 0.12, grip[0], grip[1]);
+      ink(c, s * 0.07, "#26262B");
+      ellipse(c, grip[0], grip[1], s * 0.07, s * 0.05); paint(c, "#26262B");
+    }
+  }
+  OBJECTS.wagon = (c, s) => wagon(c, s / 2, s * 0.92, s, "right", 0, 0, false, null);
+
   /** A solid silhouette of a critter (for ones you've met but not befriended). */
   function silhouette(id, w, hh, color) {
     const cv = document.createElement("canvas");
@@ -807,5 +1204,5 @@
     return cv;
   }
 
-  A.draw = { C, ground, object, person, critter, silhouette, blob, rectPts, ellipsePts, rng, paint, line };
+  A.draw = { C, ground, object, person, critter, silhouette, water, boat, wagon, pickup, blob, rectPts, ellipsePts, rng, paint, line };
 })();

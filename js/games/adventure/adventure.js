@@ -1,5 +1,5 @@
 /* =====================================================================
-   Going on an Adventure — engine
+   Garter Quest — engine
    Walk around the neighborhood, talk to people, read signs, and meet
    critters in the tall grass. Critters become friends when you answer
    their math questions.
@@ -13,11 +13,14 @@
   const { h, pick, randInt } = App.util;
   const AD = App.Adventure;
   const D = AD.draw;
-  const { TILES, CRITTERS, MAPS, START, CATCHES, makeQuestion } = AD.world;
+  const { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, makeQuestion, makeFact } = AD.world;
 
   const STEP = 14;            // frames to walk one tile
   const BIKE_STEP = 8;        // frames to ride one tile
   const SWIM_STEP = 20;       // frames to swim one tile
+  const BOAT_STEP = 10;       // frames to row one tile
+  const WAGON_STEP = 11;      // frames to push the wagon one tile
+  const BROTHER_SAYS = ["Wheee!", "Faster!", "Again! Again!", "Beep beep!", "Vroom!", "This is the best!", "Woo-hoo!", "Turbo mode!"];
   const BITE_WINDOW = { easy: 80, medium: 60, hard: 45 }; // frames to react when a fish bites
   const NPC_STEP = 22;        // people stroll a bit slower
   const LINE = 30;            // characters per line of talking
@@ -75,7 +78,7 @@
   /* ================================================================== */
   const Adventure = {
     id: "adventure",
-    title: "Going on an Adventure",
+    title: "Garter Quest",
     tagline: "Explore the neighborhood & make critter friends",
     accent: "olive",
     wide: true, // gets a full-width tile on the home screen
@@ -111,6 +114,8 @@
       this.talk = h("div", { class: "advtalk", hidden: true, role: "status", "aria-live": "polite", onclick: () => Input.press("a") },
         this.talkText = h("p"), this.talkMore = h("span", { class: "more", "aria-hidden": "true", text: "▼" }));
       this.menuEl = h("div", { class: "advmenu", hidden: true });
+      this.questEl = h("div", { class: "advquest", hidden: true, role: "status", "aria-live": "polite" });
+      this.roomEl = h("div", { class: "advroom", hidden: true });
       this.bookEl = h("div", { class: "advbook", hidden: true });
       this.fishEl = h("div", { class: "advfish", hidden: true },
         this.fishMsg = h("p", { role: "status", "aria-live": "polite" }),
@@ -126,7 +131,7 @@
         button("b", "B: back, or hop on and off your bike", "B"),
         button("a", "A: talk or choose", "A"),
         button("start", "Menu", "☰"),
-        this.fishEl, this.talk, this.menuEl, this.bookEl);
+        this.questEl, this.roomEl, this.fishEl, this.talk, this.menuEl, this.bookEl);
       ui.body.append(this.stage);
 
       // joystick: drag from the middle in any direction
@@ -179,8 +184,23 @@
       this.riding = false;
       // where the bike is parked: from the save, or its starting spot
       this.bike = save?.bike && MAPS[save.bike.map] ? save.bike : this.bikeHome();
-      const at = save && MAPS[save.map] ? save : START;
+      // a save from an older version of a map may point somewhere that's now a wall
+      const fresh = (m) => !MAPS[m]?.layout || save?.layouts?.[m] === MAPS[m].layout;
+      const at = save && MAPS[save.map] && fresh(save.map) ? save : START;
+      if (this.bike && !fresh(this.bike.map)) this.bike = this.bikeHome();
+      // quests: the one you're on (with where its items are hidden), and the ones you've finished
+      this.quest = save?.quest && QUESTS[save.quest.id] && fresh(QUESTS[save.quest.id].map) ? save.quest : null;
+      this.questsDone = save?.questsDone || [];
+      this.room = null;
+      // the wagon: parked somewhere (you start out walking)
+      this.wagoning = false;
+      this.wagon = save?.wagon && MAPS[save.wagon.map] && fresh(save.wagon.map) ? save.wagon : this.itemHome("wagon");
+      this.bubble = null;
+      // the boat: parked somewhere, or you're in it
+      this.boating = !!save?.boating && fresh(save?.map);
+      this.boat = this.boating ? null : save?.boat && MAPS[save.boat.map] && fresh(save.boat.map) ? save.boat : this.boatHome();
       this.loadMap(at.map, at.x, at.y, at.dir);
+      if (this.tileAt(at.x, at.y).solid) this.loadMap(START.map, START.x, START.y, START.dir);
       this.scene = "world";
       this.dialog = this.menu = this.fade = this.battle = null;
       this.tick = 0;
@@ -188,7 +208,7 @@
       this.updateProgress();
       if (!save) {
         this.say([
-          "Welcome to GOING ON AN ADVENTURE!",
+          "Welcome to GARTER QUEST!",
           "Drag the joystick to walk. Press A to talk to people and read signs.",
           "Go outside and look for critters in the tall grass!",
         ]);
@@ -210,12 +230,35 @@
       App.Store.set("adventure", {
         map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir,
         friends: [...this.friends], seen: [...this.seen], hasBike: this.hasBike,
+        boating: !!this.boating,
+        quest: this.quest, questsDone: this.questsDone,
+        wagon: this.wagon || { map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir },
+        boat: this.boat || { map: this.mapId, x: this.player.x, y: this.player.y, dir: this.player.dir },
         // while riding, the bike is wherever you are
         bike: this.bike || { map: this.mapId, x: this.player.x, y: this.player.y },
+        layouts: Object.fromEntries(Object.entries(MAPS).filter(([, m]) => m.layout).map(([id, m]) => [id, m.layout])),
       });
     },
 
     /** The bike's starting spot: the first map that lists one in its items. */
+    /** Where an item of this kind starts: the first map that lists one. */
+    itemHome(kind) {
+      for (const [id, m] of Object.entries(MAPS)) {
+        const it = (m.items || []).find((i) => i.kind === kind);
+        if (it) return { map: id, x: it.x, y: it.y, dir: it.dir || "right" };
+      }
+      return null;
+    },
+
+    /** The boat's starting spot: the first map that lists one in its items. */
+    boatHome() {
+      for (const [id, m] of Object.entries(MAPS)) {
+        const it = (m.items || []).find((i) => i.kind === "boat");
+        if (it) return { map: id, x: it.x, y: it.y, dir: it.dir || "right" };
+      }
+      return null;
+    },
+
     bikeHome() {
       for (const [id, m] of Object.entries(MAPS)) {
         const it = (m.items || []).find((i) => i.kind === "bike");
@@ -249,9 +292,17 @@
       this.people = (this.map.people || []).map((p) => ({
         ...p, home: { x: p.x, y: p.y }, fromX: p.x, fromY: p.y, moving: false, t: 0, wait: randInt(60, 200),
       }));
-      this.items = (this.map.items || []).filter((it) => it.kind !== "bike");
+      this.items = (this.map.items || []).filter((it) => !["bike", "boat", "wagon"].includes(it.kind));
+      if (this.wagon && this.wagon.map === id) this.items.push({ kind: "wagon", x: this.wagon.x, y: this.wagon.y, dir: this.wagon.dir });
+      if (this.boat && this.boat.map === id) this.items.push({ kind: "boat", x: this.boat.x, y: this.boat.y, dir: this.boat.dir });
+      if (this.boating && !this.tileAt(x, y).swim) this.boating = false;
       if (this.bike && this.bike.map === id) this.items.push({ kind: "bike", x: this.bike.x, y: this.bike.y });
+      this.pickups = (this.quest?.spots || []).filter((sp) => sp.map === id && !sp.got);
+      this.room = null;
+      if (this.tick != null) this.checkRoom();
       this.grace = 2;
+      this.fx = [];
+      this.swimX = null;
       this.labelHouses();
     },
 
@@ -277,7 +328,7 @@
     tileAt(x, y) { return TILES[this.charAt(x, y)] || TILES[this.map.border]; },
     personAt(x, y) { return this.people.find((p) => p.x === x && p.y === y); },
     itemAt(x, y) { return this.items.find((it) => it.x === x && it.y === y); },
-    stepTime(x, y) { return this.riding ? BIKE_STEP : this.tileAt(x, y).swim ? SWIM_STEP : STEP; },
+    stepTime(x, y) { return this.boating ? BOAT_STEP : this.wagoning ? WAGON_STEP : this.riding ? BIKE_STEP : this.tileAt(x, y).swim ? SWIM_STEP : STEP; },
 
     blocked(x, y, who) {
       if (y < 0 || y >= this.map.tiles.length || x < 0 || x >= this.map.tiles[0].length) return true;
@@ -315,6 +366,7 @@
       else if (this.scene === "book") this.updateBook();
       else if (this.scene === "fishing") this.updateFishing();
       if (this.scene === "world") this.updatePeople();
+      this.updateFx();
       Input.pressed.clear();
     },
 
@@ -330,12 +382,13 @@
         if (p.t < p.dur) return;
         p.moving = false;
         p.chain = true;
+        if (this.wagoning && (!this.bubble || this.tick > this.bubble.until + 120) && Math.random() < 0.12) this.brotherSays(pick(BROTHER_SAYS));
         if (this.arrive()) return;
       }
       if (p.bumpWait > 0) p.bumpWait--;
       if (Input.take("start")) return this.openStartMenu();
       if (Input.take("a")) return this.interact();
-      if (Input.take("b")) return this.bikeButton();
+      if (Input.take("b")) return this.boating ? this.leaveBoat() : this.wagoning ? this.parkWagon() : this.bikeButton();
 
       const d = Input.dir();
       if (!d) { p.chain = false; p.turn = 0; return; }
@@ -345,7 +398,22 @@
       }
       if (p.turn > 0) { p.turn--; return; }
       const nx = p.x + DIRS[d][0], ny = p.y + DIRS[d][1];
-      if (this.riding && this.tileAt(nx, ny).swim) {
+      if (this.boating) {
+        const inMap = ny >= 0 && ny < this.map.tiles.length && nx >= 0 && nx < this.map.tiles[0].length;
+        if (!inMap || !this.tileAt(nx, ny).swim || this.blocked(nx, ny, p)) {
+          p.chain = false;
+          if (!p.bumpWait) {
+            sfx.bump(); p.bumpWait = 30;
+            if (!inMap) this.say(["The water goes on and on... New places to sail to are coming soon!"]);
+            else if (!this.tileAt(nx, ny).swim) this.say(["Land ho! Face the dock or the shore and press B to step out."]);
+          }
+          return;
+        }
+      } else if (this.wagoning && this.tileAt(nx, ny).swim) {
+        p.chain = false;
+        if (!p.bumpWait) { sfx.bump(); p.bumpWait = 30; this.say(["Wagons don't float! Press B to park it first."]); }
+        return;
+      } else if (this.riding && this.tileAt(nx, ny).swim) {
         p.chain = false;
         if (!p.bumpWait) { sfx.bump(); p.bumpWait = 18; this.say(["Bikes can't swim! Press B to hop off first."]); }
         return;
@@ -358,6 +426,197 @@
       p.fromX = p.x; p.fromY = p.y;
       p.x = nx; p.y = ny;
       p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime(nx, ny);
+      p.ease = !this.boating && (this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim);
+    },
+
+    /* ---------------- quests ---------------- */
+    /** The next quest this person can give, if any. */
+    availableQuest(id) {
+      return Object.keys(QUESTS).find((k) => QUESTS[k].giver === id && !this.questsDone.includes(k));
+    },
+
+    /**
+     * Quest talk with anyone: offering a quest, checking on progress, or
+     * finishing it. Returns false if this person has nothing quest-related to say.
+     */
+    questTalk(person) {
+      const id = person.id;
+      if (!id) return false;
+      const NAME = person.name || id.toUpperCase();
+      const fishing = person.action === "fishing";
+      const thenFish = fishing ? () => this.fishingQuestion() : undefined;
+      const q = this.quest, Q = q && QUESTS[q.id];
+      if (Q) {
+        if (Q.to === id && q.have >= Q.need) { this.finishQuest(); return true; }
+        if (Q.giver === id && q.have >= Q.need) { this.say([`${NAME}: You did it! Now go see ${Q.toName}!`]); return true; }
+        if (Q.giver === id || Q.to === id) {
+          this.say([`${NAME}: You've got ${q.have} of ${Q.need} ${Q.items}. ${Q.hint}`], thenFish);
+          return true;
+        }
+        if (this.availableQuest(id)) {
+          this.say([`${NAME}: Finish helping ${Q.toName} first, then come see me!`], thenFish);
+          return true;
+        }
+        return false;
+      }
+      const next = this.availableQuest(id);
+      if (!next) {
+        if (fishing || person.look === "squirrel") return false;
+        if (Object.keys(QUESTS).some((k) => QUESTS[k].giver === id && this.questsDone.includes(k))) {
+          this.say([`${NAME}: Thank you for all your help. I'm so proud of you!`, ...person.talk.slice(1)]);
+          return true;
+        }
+        return false;
+      }
+      const N = QUESTS[next];
+      this.say(N.offer, () => this.openMenu({
+        kind: "choice",
+        title: N.title,
+        items: ["Yes, I'll help!", "Not right now"],
+        onPick: (i) => {
+          this.menu = null;
+          if (i === 0) this.startQuest(next, thenFish);
+          else this.say([`${NAME}: Okay! Come find me when you're ready.`], thenFish);
+        },
+        onBack: () => { this.menu = null; },
+      }));
+      return true;
+    },
+
+    startQuest(id, then) {
+      const Q = QUESTS[id];
+      this.quest = { id, have: 0, spots: Q.kind === "collect" ? this.hideItems(Q) : [] };
+      this.pickups = this.quest.spots.filter((sp) => sp.map === this.mapId);
+      this.save();
+      App.Sound.win();
+      this.say([Q.accept, `Quest started: ${Q.title}! While you're on it, wild critters will stay away.`], then);
+    },
+
+    /** Hide a quest's items: in the tall grass near home, or in a named area (like Gram's garden). */
+    hideItems(Q) {
+      const mapId = Q.map, kind = Q.item, n = Q.need + (Q.extra ?? 3), gap = Q.spacing ?? 6;
+      const m = MAPS[mapId];
+      const area = (Q.area && m[Q.area]) || { y0: 0, y1: m.tiles.length - 1, ...(m.questArea || { x0: 0, x1: m.tiles[0].length - 1 }) };
+      const want = Q.tile || ",";
+      const spots = [];
+      const cand = [];
+      m.tiles.forEach((row, y) => [...row].forEach((ch, x) => {
+        if (ch !== want || x < area.x0 || x > area.x1 || y < area.y0 || y > area.y1) return;
+        if ((m.people || []).some((p) => Math.abs(p.x - x) + Math.abs(p.y - y) < 2)) return;
+        // squirrels drop things under trees, so favor spots near one
+        let near = 0;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (m.tiles[y + dy]?.[x + dx] === "T") near = 1;
+        cand.push({ x, y, w: 1 + near * 2 });
+      }));
+      for (let tries = 0; spots.length < n && tries < 4000; tries++) {
+        const total = cand.reduce((a, c) => a + c.w, 0);
+        let r = Math.random() * total, c = cand[0];
+        for (const cc of cand) { r -= cc.w; if (r <= 0) { c = cc; break; } }
+        if (spots.every((sp) => Math.abs(sp.x - c.x) + Math.abs(sp.y - c.y) >= gap)) spots.push({ map: mapId, x: c.x, y: c.y, kind, got: false });
+      }
+      return spots;
+    },
+
+    collect(it) {
+      const Q = QUESTS[this.quest.id];
+      it.got = true;
+      this.pickups = this.pickups.filter((p) => p !== it);
+      this.quest.have = Math.min(Q.need, this.quest.have + 1);
+      [880, 1175].forEach((f, i) => tone(f, 0.08, "triangle", 0.12, i * 0.07));
+      this.fx.push({ kind: "ring", x: it.x + 0.5, y: it.y + 0.6, size: 0.6, life: 30, age: 0 });
+      this.save();
+      if (this.quest.have === Q.need) {
+        App.Sound.win();
+        this.say([`That's all ${Q.need} ${Q.items}!`, Q.doneSay || `Bring them to ${Q.toName}.`]);
+      }
+    },
+
+    finishQuest() {
+      const Q = QUESTS[this.quest.id];
+      this.questsDone.push(this.quest.id);
+      this.quest = null;
+      this.pickups = [];
+      for (let i = 0; i < QUEST_STARS; i++) this.ui.award({ celebrate: false });
+      App.Sound.win();
+      App.FX.celebrate(true, "Quest complete!");
+      this.save();
+      const left = [...new Set(Object.keys(QUESTS).filter((id) => !this.questsDone.includes(id)).map((id) => GIVERS[QUESTS[id].giver]))];
+      this.say([...Q.thanks, `Quest complete! You earned ${QUEST_STARS} stars.`,
+        left.length ? `${left.join(" or ")} might have another job for you.` : "You've finished every quest!"]);
+    },
+
+    /** Pop up the room's name when you walk into a new one. */
+    checkRoom() {
+      const p = this.player;
+      const room = (this.map.rooms || []).find((r) => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1);
+      const name = room ? room.name : null;
+      if (name && name !== this.room) this.roomToast = { text: name, until: this.tick + 100 };
+      this.room = name;
+    },
+
+    /* ---------------- the wagon ---------------- */
+    startWagon(wagon) {
+      if (this.riding) return this.say(["Hop off your bike first! Press B."]);
+      this.items = this.items.filter((it) => it !== wagon);
+      this.wagon = null;
+      this.wagoning = true;
+      this.player.dir = wagon.dir || this.player.dir;
+      tone(520, 0.08, "triangle", 0.1); tone(780, 0.1, "triangle", 0.1, 0.08);
+      this.save();
+      if (!this.pushedBefore) {
+        this.pushedBefore = true;
+        this.say(["Your little brother hops in the wagon!", "LITTLE BRO: Push me! Push me! (Press B to park the wagon.)"]);
+      } else this.brotherSays("Yay! Let's go!");
+    },
+
+    /** Park the wagon on a tile (where you are, unless given). */
+    parkWagon(x = this.player.x, y = this.player.y) {
+      this.wagoning = false;
+      this.wagon = { map: this.mapId, x, y, dir: this.player.dir };
+      this.items.push({ kind: "wagon", x, y, dir: this.player.dir });
+      tone(440, 0.08, "triangle", 0.1);
+      this.save();
+      this.brotherSays("That was fun! Again later!");
+    },
+
+    brotherSays(text) { this.bubble = { text, until: this.tick + 150 }; },
+
+    /* ---------------- the boat ---------------- */
+    boardBoat(boat) {
+      if (this.riding) return this.say(["Hop off your bike first! Press B."]);
+      const p = this.player;
+      this.items = this.items.filter((it) => it !== boat);
+      this.boat = null;
+      this.boating = true;
+      // step into the boat
+      p.fromX = p.x; p.fromY = p.y; p.x = boat.x; p.y = boat.y;
+      p.moving = true; p.t = 0; p.dur = 12; p.ease = false; p.chain = false;
+      this.splash(boat.x + 0.5, boat.y + 0.6, 6, 0.5);
+      tone(330, 0.1, "triangle", 0.1); tone(495, 0.12, "triangle", 0.1, 0.08);
+      this.save();
+      if (!this.sailedBefore) {
+        this.sailedBefore = true;
+        this.say(["You climbed into the boat!", "Steer around the water. To get out, face the dock or the shore and press B."]);
+      }
+    },
+
+    leaveBoat() {
+      const p = this.player;
+      const [dx, dy] = DIRS[p.dir];
+      const tx = p.x + dx, ty = p.y + dy;
+      const t = this.tileAt(tx, ty);
+      const inMap = ty >= 0 && ty < this.map.tiles.length && tx >= 0 && tx < this.map.tiles[0].length;
+      if (!inMap || t.swim || t.solid || this.blocked(tx, ty, p)) {
+        return this.say(["Steer next to the dock or the shore, face it, and press B to step out."]);
+      }
+      this.boating = false;
+      this.boat = { map: this.mapId, x: p.x, y: p.y, dir: p.dir };
+      this.items.push({ kind: "boat", x: p.x, y: p.y, dir: p.dir });
+      p.fromX = p.x; p.fromY = p.y; p.x = tx; p.y = ty;
+      p.moving = true; p.t = 0; p.dur = 12; p.ease = false; p.chain = false;
+      this.justLeftBoat = true;
+      tone(440, 0.08, "triangle", 0.1);
+      this.save();
     },
 
     /** B: get off if riding, or get on if the bike is right here. */
@@ -401,15 +660,26 @@
     /** Called when the player finishes a step. Returns true if a door or critter took over. */
     arrive() {
       const p = this.player;
-      const warp = (this.map.warps || []).find((w) => w.x === p.x && w.y === p.y);
+      // doors are for walking; warps marked byBoat are sea routes to other places
+      const warp = (this.map.warps || []).find((w) => w.x === p.x && w.y === p.y && !!w.byBoat === !!this.boating);
       if (warp) {
         if (this.riding && MAPS[warp.to].indoors) this.getOff(p.fromX, p.fromY);
+        if (this.wagoning && MAPS[warp.to].indoors) this.parkWagon(p.fromX, p.fromY);
         sfx.door();
         this.transition(() => { this.loadMap(warp.to, warp.tx, warp.ty, warp.dir); this.save(); });
         return true;
       }
+      const got = this.pickups.find((it) => it.x === p.x && it.y === p.y);
+      if (got) this.collect(got);
+      this.checkRoom();
       const here = this.tileAt(p.x, p.y);
-      const pool = here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
+      const wasSwimming = this.tileAt(p.fromX, p.fromY).swim;
+      if (this.boating) { /* boats don't splash like swimmers */ }
+      else if (here.swim && !wasSwimming) { this.splash(p.x + 0.5, p.y + 0.56, 14, 1); tone(240, 0.18, "sine", 0.12); tone(520, 0.12, "sine", 0.06, 0.05); }
+      else if (!here.swim && wasSwimming && !this.justLeftBoat) this.splash(p.x + 0.5, p.y + 0.5, 5, 0.4);
+      this.justLeftBoat = false;
+      // no wild critters while boating or on a quest, so the quest stays the focus
+      const pool = this.boating || this.quest ? null : here.grass ? this.map.critters : here.swim ? this.map.waterCritters : null;
       if (pool) {
         if (this.grace > 0) this.grace--;
         else if (Math.random() < ENCOUNTER_RATE) { this.startBattle(pick(pool), here.swim); return true; }
@@ -440,13 +710,164 @@
       const person = this.personAt(fx, fy);
       if (person) {
         if (!person.moving) person.dir = OPPOSITE[p.dir];
+        if (this.questTalk(person)) return;
         if (person.action === "fishing") return this.say(person.talk, () => this.fishingQuestion());
+        if (person.look === "squirrel" && Object.keys(QUESTS).some((id) => QUESTS[id].to === person.id && this.questsDone.includes(id))) {
+          return this.say([`${person.name}: My friend! Thanks again for your help. Chitter chitter!`]);
+        }
         return this.say(person.talk);
       }
       const item = this.itemAt(fx, fy);
       if (item && item.kind === "bike") return this.getOn(item);
+      if (item && item.kind === "boat") return this.boardBoat(item);
+      if (item && item.kind === "wagon") return this.startWagon(item);
       const sign = (this.map.signs || []).find((s) => s.x === fx && s.y === fy);
       if (sign) this.say(sign.text);
+    },
+
+    /* ---------------- water physics: splashes, ripples, wakes ----------------
+       Particles live in tile units. Drops fly up and fall back with gravity
+       (z is their height above the water) and leave a small ripple where
+       they land. Rings spread out and fade. Wakes drift sideways and slow
+       down from the water's drag.                                          */
+    splash(x, y, n, power = 1) {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, sp = (0.01 + Math.random() * 0.025) * power;
+        this.fx.push({ kind: "drop", x, y, z: 0.12, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: (0.04 + Math.random() * 0.05) * power, age: 0 });
+      }
+      this.fx.push({ kind: "ring", x, y, size: 0.7 * power + 0.2, life: 55, age: 0 });
+    },
+    ring(x, y, size = 0.45, life = 45) { this.fx.push({ kind: "ring", x, y, size, life, age: 0 }); },
+
+    updateFx() {
+      const p = this.player;
+      if (this.scene === "world" && this.tileAt(Math.round(this.swimX ?? p.x), Math.round(this.swimY ?? p.y)).swim && this.swimX != null) {
+        // a swimmer pushes water: a wake while moving, slow rings while floating
+        if (p.moving && this.boating) {
+          const [dx, dy] = DIRS[p.dir];
+          if (this.tick % 4 === 0) {
+            for (const k of [-1, 1]) {
+              this.fx.push({ kind: "wake", x: this.swimX - dx * 0.55, y: this.swimY - dy * 0.35 + 0.05, vx: -dy * k * 0.03 - dx * 0.01, vy: dx * k * 0.02 - dy * 0.01, life: 55, age: 0 });
+            }
+          }
+          if (this.tick % 12 === 0) this.ring(this.swimX - dx * 0.6, this.swimY - dy * 0.4, 0.5, 40);
+        } else if (p.moving && p.ease) {
+          const [dx, dy] = DIRS[p.dir];
+          if (this.tick % 7 === 0) {
+            for (const k of [-1, 1]) {
+              this.fx.push({ kind: "wake", x: this.swimX - dx * 0.25, y: this.swimY - dy * 0.15, vx: -dy * k * 0.02 - dx * 0.006, vy: dx * k * 0.014 - dy * 0.006, life: 42, age: 0 });
+            }
+          }
+          if (this.tick % 18 === 0) this.ring(this.swimX, this.swimY, 0.35, 38);
+        } else if (this.tick % 70 === 0) this.ring(this.swimX, this.swimY, 0.3, 50);
+      }
+      for (const f of this.fx) {
+        f.age++;
+        if (f.kind === "drop") {
+          f.x += f.vx; f.y += f.vy; f.z += f.vz; f.vz -= 0.0065;
+          if (f.z <= 0) { f.dead = true; this.ring(f.x, f.y, 0.14, 24); }
+        } else if (f.kind === "wake") {
+          f.x += f.vx; f.y += f.vy; f.vx *= 0.95; f.vy *= 0.95;
+          if (f.age > f.life) f.dead = true;
+        } else if (f.age > f.life) f.dead = true;
+      }
+      this.fx = this.fx.filter((f) => !f.dead);
+      if (this.fx.length > 220) this.fx.splice(0, this.fx.length - 220);
+    },
+
+    /** Ripples and wakes, drawn on the water's surface. */
+    drawSurfaceFx(c, camX, camY, waterPath) {
+      const T = this.T;
+      c.save(); c.clip(waterPath); c.lineCap = "round";
+      for (const f of this.fx) {
+        const x = f.x * T - camX, y = f.y * T - camY, k = f.age / f.life;
+        if (f.kind === "ring") {
+          const rx = f.size * T * (0.35 + k * 0.9);
+          c.strokeStyle = `rgba(255,255,255,${(1 - k) * 0.85})`; c.lineWidth = Math.max(1, T * 0.035 * (1 - k * 0.5));
+          c.beginPath(); c.ellipse(x, y, rx, rx * 0.32, 0, 0, Math.PI * 2); c.stroke();
+        } else if (f.kind === "wake") {
+          c.strokeStyle = `rgba(255,255,255,${(1 - k) * 0.7})`; c.lineWidth = Math.max(1, T * 0.03);
+          c.beginPath(); c.moveTo(x - T * 0.12, y); c.quadraticCurveTo(x, y - T * 0.05, x + T * 0.12, y); c.stroke();
+        }
+      }
+      c.restore();
+    },
+
+    /** Flying drops, drawn above everything. */
+    drawDrops(c, camX, camY) {
+      const T = this.T;
+      c.fillStyle = "rgba(255,255,255,.95)"; c.strokeStyle = "rgba(60,140,160,.6)"; c.lineWidth = 1;
+      for (const f of this.fx) {
+        if (f.kind !== "drop") continue;
+        const x = f.x * T - camX, y = (f.y - f.z) * T - camY, r = T * 0.04;
+        c.beginPath(); c.ellipse(x, y, r, r * 1.2, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+      }
+    },
+
+    /** The sky mirrored in the water: soft clouds drifting by and a sun glint. */
+    drawSky(c, waterPath, camX, camY, t) {
+      const T = this.T, mw = this.map.tiles[0].length + 8;
+      c.save(); c.clip(waterPath);
+      for (let i = 0; i < 6; i++) {
+        const x = ((((i * 13.7 + t * 0.12) % mw) + mw) % mw) - 4, y = (i * 9.1) % this.map.tiles.length;
+        const cx = x * T - camX, cy = y * T - camY;
+        for (const [ox, oy, rx, ry] of [[0, 0, 2.2, 0.7], [1.3, -0.25, 1.4, 0.55], [-1.2, 0.15, 1.3, 0.5]]) {
+          const g = c.createRadialGradient(cx + ox * T, cy + oy * T, 0, cx + ox * T, cy + oy * T, rx * T);
+          g.addColorStop(0, "rgba(255,255,255,.26)"); g.addColorStop(1, "rgba(255,255,255,0)");
+          c.fillStyle = g;
+          c.save(); c.translate(cx + ox * T, cy + oy * T); c.scale(1, ry / rx); c.translate(-(cx + ox * T), -(cy + oy * T));
+          c.fillRect(cx + ox * T - rx * T, cy + oy * T - rx * T, rx * T * 2, rx * T * 2);
+          c.restore();
+        }
+      }
+      // sun glint: a few bright flecks that twinkle in a fixed spot on screen
+      for (let i = 0; i < 9; i++) {
+        const a = Math.sin(t * 2.3 + i * 1.7);
+        if (a < 0.2) continue;
+        const gx = this.W * 0.72 + Math.sin(i * 2.1) * T * 1.2, gy = this.H * 0.28 + Math.cos(i * 1.3) * T * 0.8;
+        c.fillStyle = `rgba(255,255,240,${a * 0.85})`;
+        c.beginPath(); c.ellipse(gx, gy, T * 0.12 * a, T * 0.035, 0, 0, Math.PI * 2); c.fill();
+      }
+      c.restore();
+    },
+
+    /* ---------------- reflections ----------------
+       Anything standing at the water's edge or on the dock is drawn again,
+       upside down, into a buffer: mirrored at its base, tinted by the water,
+       faded with distance, then copied onto the water in thin strips that
+       sway with the ripples.                                              */
+    drawReflections(things, waterPath, t) {
+      if (!things.length) return;
+      const W = this.W, H = this.H, dpr = this.dpr, T = this.T, c = this.ctx;
+      const buf = (this.reflBuf = this.reflBuf || document.createElement("canvas"));
+      if (buf.width !== Math.round(W * dpr) || buf.height !== Math.round(H * dpr)) {
+        buf.width = Math.round(W * dpr); buf.height = Math.round(H * dpr);
+      }
+      const rc = buf.getContext("2d");
+      rc.setTransform(1, 0, 0, 1, 0, 0);
+      rc.clearRect(0, 0, buf.width, buf.height);
+      rc.setTransform(dpr, 0, 0, dpr, 0, 0);
+      let top = Infinity, bottom = -Infinity;
+      for (const th of things) {
+        const m = th.mirror, len = th.reach * T;
+        rc.save(); rc.translate(0, 2 * m); rc.scale(1, -1); th.draw(rc); rc.restore();
+        rc.save();
+        rc.globalCompositeOperation = "destination-out";
+        const g = rc.createLinearGradient(0, m, 0, m + len);
+        g.addColorStop(0, "rgba(0,0,0,.05)"); g.addColorStop(1, "rgba(0,0,0,1)");
+        rc.fillStyle = g; rc.fillRect(th.cx - T * 1.2, m, T * 2.4, len + T);
+        rc.restore();
+        top = Math.min(top, m); bottom = Math.max(bottom, m + len);
+      }
+      rc.save(); rc.globalCompositeOperation = "source-atop";
+      rc.fillStyle = "rgba(40,115,140,.4)"; rc.fillRect(0, 0, W, H); rc.restore();
+      c.save(); c.clip(waterPath); c.globalAlpha = 0.7;
+      const y0 = Math.max(0, Math.floor(top)), y1 = Math.min(H, Math.ceil(bottom));
+      for (let y = y0; y < y1; y += 2) {
+        const dx = Math.sin(y * 0.2 + t * 3.1) * 1.4 + Math.sin(y * 0.055 - t * 1.4) * 1.6;
+        c.drawImage(buf, 0, y * dpr, buf.width, 2 * dpr, dx, y, W, 2);
+      }
+      c.restore();
     },
 
     /* ---------------- fishing with Uncle Pat ---------------- */
@@ -547,6 +968,15 @@
       this.ui.award({ celebrate: false });
       App.Sound.win();
       if (isNew) App.FX.celebrate(true, "New friend!");
+      let forPat = "";
+      const q = this.quest, Q = q && QUESTS[q.id];
+      if (Q && Q.kind === "fish" && q.have < Q.need) {
+        q.have++;
+        this.save();
+        forPat = q.have >= Q.need ? ` That's ${Q.need} for Uncle Pat! Tap Done fishing and tell him.` : ` That's ${q.have} of ${Q.need} for Uncle Pat!`;
+        this.fishSay(`You caught ${cr.name}! Into Uncle Pat's bucket it goes.${forPat}`, "Cast again");
+        return;
+      }
       this.fishSay(`You caught ${cr.name}! You say hi and let it swim away.${isNew ? " It's in your Critter Book now!" : ""}`, "Cast again");
     },
 
@@ -648,13 +1078,22 @@
     },
 
     askQuestion() {
-      const q = makeQuestion(this.mode);
+      // take turns between a math question and a fact about this critter
+      const b = this.battle;
+      b.asked = (b.asked || 0) + 1;
+      if (b.factFirst == null) b.factFirst = Math.random() < 0.5;
+      const wantFact = (b.asked % 2 === 1) === b.factFirst;
+      b.facts = b.facts || [];
+      const fact = wantFact ? makeFact(b.id, b.facts) : null;
+      if (fact) b.facts.push(fact.text);
+      const q = fact || makeQuestion(this.mode);
       this.battle.q = q;
       this.openMenu({
         kind: "answers",
+        facts: !!q.fact,
         title: q.text,
         items: q.choices.map(String),
-        cols: 2,
+        cols: q.fact ? 1 : 2,
         onPick: (i) => { this.menu = null; this.answer(q.choices[i]); },
         onBack: () => { this.menu = null; this.battleMenu(); },
       });
@@ -662,7 +1101,7 @@
 
     answer(v) {
       const b = this.battle;
-      const solved = b.q.text.replace("?", b.q.answer);
+      const solved = b.q.fact ? b.q.why : b.q.text.replace("?", b.q.answer);
       if (v === b.q.answer) {
         b.hearts++;
         b.hop = 24;
@@ -675,9 +1114,9 @@
       b.shake = 18;
       App.Sound.miss();
       if (b.bored >= BORED_LIMIT) {
-        return this.say([`Not quite. ${solved}`, `${b.c.name} got bored and wandered off.`], () => this.endBattle());
+        return this.say([`Not quite. ${b.q.fact ? `It's "${b.q.answer}". ` : ""}${solved}`, `${b.c.name} got bored and wandered off.`], () => this.endBattle());
       }
-      this.say([`Not quite. ${solved}`, "Let's try another one!"], () => this.battleMenu());
+      this.say([`Not quite. ${b.q.fact ? `It's "${b.q.answer}". ` : ""}${solved}`, "Let's try another one!"], () => this.battleMenu());
     },
 
     befriend() {
@@ -730,7 +1169,9 @@
       const t = this.tick / 60;
       const p = this.player;
       const pos = (e, dur) => {
-        const k = e.moving ? e.t / dur : 1;
+        let k = e.moving ? e.t / dur : 1;
+        if (e.moving && e.ease) k = (1 - Math.cos(Math.PI * k)) / 2; // swim strokes: push, glide, slow
+
         return { x: e.fromX + (e.x - e.fromX) * k, y: e.fromY + (e.y - e.fromY) * k };
       };
       const pp = pos(p, p.dur);
@@ -744,51 +1185,129 @@
         return ch === "h" ? o === "h" : o === ch;
       };
 
-      // ground
-      const objects = [];
+      // ground. Water is painted afterwards as one layer, so it has no seams.
+      const isWet = (ch) => {
+        const g = TILES[ch]?.ground;
+        return (g === "water" || g === "dock") && !AD.assets.tiles[ch];
+      };
+      const objects = [], wet = [], docks = [];
+      const waterPath = new Path2D();
       for (let ty = y0; ty <= y1; ty++) {
         for (let tx = x0; tx <= x1; tx++) {
           const ch = this.charAt(tx, ty);
           const tile = TILES[ch];
           const sx = tx * T - camX, sy = ty * T - camY;
           const variant = AD.hash(tx, ty) % 4;
-          D.ground(c, tile.ground, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
+          if (isWet(ch)) {
+            waterPath.rect(sx, sy, T, T);
+            wet.push([tx, ty, sx, sy]);
+            if (tile.ground === "dock") docks.push([tx, ty, sx, sy, ch]);
+          } else {
+            const gname = ch === "g" && this.questsDone.includes("garden") ? "gardenBloom" : tile.ground;
+            D.ground(c, gname, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
+          }
           if (tile.object) objects.push({ y: ty + 1, tx, ty, ch, tile, sx, sy, variant });
         }
       }
-
-      // things that stand up, and people, back to front
+      // things that stand up, and people
       const actors = [
         ...this.people.map((n) => ({ e: n, look: n.look, dur: NPC_STEP, at: pos(n, NPC_STEP) })),
         { e: p, look: this.riding ? "heroBike" : "hero", dur: p.dur, at: pp },
       ];
-      const items = [
-        ...objects.map((o) => ({ y: o.y, draw: () => {
+      const things = [
+        ...objects.map((o) => ({ y: o.y, tx: o.tx, ty: o.ty, cx: o.sx + T / 2, base: o.sy + T, onWet: isWet(o.ch), draw: (cc) => {
           const house = o.ch === "h" ? this.houseOf[o.ty]?.[o.tx] ?? 0 : 0;
           const info = { color: AD.hash(house, this.mapId.length) % AD.HOUSES.length, window: o.ch === "h" && AD.hash(o.tx, o.ty, 3) % 3 === 0 };
-          D.object(c, o.tile.object, o.ch, o.sx, o.sy, T, dpr, AD.maskOf(same(o.tx, o.ty, o.ch)), o.variant, info);
+          D.object(cc, o.tile.object, o.ch, o.sx, o.sy, T, dpr, AD.maskOf(same(o.tx, o.ty, o.ch)), o.variant, info);
         } })),
-        ...actors.map((a) => ({ y: a.at.y + 0.95, draw: () => this.drawActor(a, camX, camY, t) })),
-        ...this.items.map((it) => ({ y: it.y + 0.9, draw: () => {
-          D.object(c, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0);
-        } })),
+        ...actors.map((a) => ({ y: a.at.y + 0.95, tx: Math.round(a.at.x), ty: Math.round(a.at.y), actor: true,
+          cx: a.at.x * T + T / 2 - camX, base: a.at.y * T + T * 0.9 - camY, draw: (cc) => this.drawActor(a, camX, camY, t, cc) })),
+        ...this.pickups.map((it) => ({ y: it.y + 0.5, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.8 - camY,
+          draw: (cc) => D.pickup(cc, it.kind, it.x * T + T / 2 - camX, it.y * T + T * 0.6 - camY, T, t) })),
+        ...this.items.map((it) => ({ y: it.y + 0.9, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.92 - camY,
+          draw: (cc) => it.kind === "wagon"
+            ? D.wagon(cc, it.x * T + T / 2 - camX, it.y * T + T * 0.9 - camY, T, it.dir || "right", t, null, false, null)
+            : it.kind === "boat"
+            ? D.boat(cc, it.x * T + T / 2 - camX, it.y * T + T * 0.62 - camY, T, it.dir || "right", t, false)
+            : D.object(cc, it.kind, it.kind, it.x * T - camX, it.y * T - camY, T, dpr, 0, 0) })),
       ].sort((a, b) => a.y - b.y);
-      items.forEach((it) => it.draw());
+
+      const swimmer = this.tileAt(Math.round(pp.x), Math.round(pp.y)).swim;
+      this.swimX = swimmer && !this.riding ? pp.x + 0.5 : null;
+      if (this.boating) this.swimY = pp.y + 0.62;
+      this.swimY = pp.y + 0.56;
+
+      if (wet.length) {
+        D.water(c, dpr, waterPath, camX, camY, t);
+        this.drawSky(c, waterPath, camX, camY, t);
+        // reflections of anything at the water's edge or on the dock (not swimmers)
+        const mirrored = things.filter((th) => {
+          if (th.actor && this.tileAt(th.tx, th.ty).swim) return false;
+          return isWet(this.charAt(th.tx, th.ty)) || isWet(this.charAt(th.tx, th.ty + 1));
+        }).map((th) => ({ ...th, mirror: th.onWet ? th.base - T * 0.2 : th.base, reach: th.actor ? 2.4 : 2.2 }));
+        this.drawReflections(mirrored, waterPath, t);
+        // soft foam where the water meets the shore
+        c.lineCap = "round";
+        for (const [tx, ty, sx, sy] of wet) {
+          const edges = [[0, -1, sx, sy + 2, sx + T, sy + 2], [0, 1, sx, sy + T - 2, sx + T, sy + T - 2],
+            [-1, 0, sx + 2, sy, sx + 2, sy + T], [1, 0, sx + T - 2, sy, sx + T - 2, sy + T]];
+          for (const [dx, dy, x1, y1, x2, y2] of edges) {
+            if (isWet(this.charAt(tx + dx, ty + dy))) continue;
+            c.strokeStyle = "rgba(228,248,243,.95)"; c.lineWidth = T * 0.07;
+            c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+            const lap = (4 + Math.sin(t * 2 + tx + ty) * 2.5) * (T / 48);
+            c.strokeStyle = "rgba(228,248,243,.45)"; c.lineWidth = T * 0.035;
+            c.beginPath(); c.moveTo(x1 - dx * lap, y1 - dy * lap); c.lineTo(x2 - dx * lap, y2 - dy * lap); c.stroke();
+          }
+        }
+        for (const [tx, ty, sx, sy, ch] of docks) {
+          D.ground(c, "dockPlanks", ch + "p", sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), AD.hash(tx, ty) % 4);
+        }
+        this.drawSurfaceFx(c, camX, camY, waterPath);
+      }
+
+      things.forEach((it) => it.draw(c));
+      this.drawDrops(c, camX, camY);
+      if (!this.wagoning && this.bubble && this.tick < this.bubble.until && this.wagon && this.wagon.map === this.mapId) {
+        this.speech(c, this.bubble.text, this.wagon.x * T + T / 2 - camX, this.wagon.y * T - camY - T * 0.3);
+      }
     },
 
-    drawActor({ e, look, dur, at }, camX, camY, t) {
-      const c = this.ctx, T = this.T;
+    drawActor({ e, look, dur, at }, camX, camY, t, cc) {
+      const c = cc || this.ctx, T = this.T;
       const cx = at.x * T + T / 2 - camX;
       const foot = at.y * T + T * 0.9 - camY;
       const phase = e.moving ? (e.t / dur) * 0.5 + (e.leg ? 0.5 : 0) : null;
       const gx0 = Math.round(at.x), gy0 = Math.round(at.y);
+      if (e === this.player && this.wagoning) {
+        // pushing the wagon: it rolls just ahead of you, little brother inside
+        const [dx, dy] = DIRS[e.dir];
+        const wx = cx + dx * T * 0.82, wy = foot + dy * T * 0.72;
+        const grip = [cx + dx * T * 0.3, foot - T * 0.5 + (dy > 0 ? T * 0.12 : dy < 0 ? -T * 0.05 : 0)];
+        const drawWagon = () => D.wagon(c, wx, wy, T, e.dir, t, phase, true, grip);
+        if (e.dir !== "down") drawWagon();
+        D.person(c, "hero", e.dir, cx, foot, T, phase, t);
+        if (e.dir === "down") drawWagon();
+        const b = this.bubble;
+        if (b && this.tick < b.until && c === this.ctx) this.speech(c, b.text, wx, wy - T * 1.25);
+        return;
+      }
+      if (e === this.player && this.boating) {
+        // sitting in the boat: draw the boat, then you, hidden below the sides
+        const by = at.y * T + T * 0.62 - camY + Math.sin(t * 2.2) * T * 0.03;
+        D.boat(c, cx, by, T, e.dir, t, true);
+        c.save(); c.beginPath(); c.rect(cx - T * 2, by - T * 3, T * 4, T * 3 - T * 0.02); c.clip();
+        D.person(c, "hero", e.dir, cx, by + T * 0.3, T, null, t);
+        c.restore();
+        return;
+      }
       if (this.tileAt(gx0, gy0).swim && look !== "heroBike") {
         // swimming: only head and shoulders above the water
-        const waterY = foot - T * 0.34;
+        const waterY = foot - T * 0.3;
         c.save(); c.beginPath(); c.rect(cx - T, waterY - T * 2, T * 2, T * 2); c.clip();
-        D.person(c, look, e.dir, cx, foot + T * 0.32 + Math.sin(t * 3) * T * 0.03, T, null, t);
+        D.person(c, look, e.dir, cx, foot + T * 0.12 + Math.sin(t * 3) * T * 0.04, T * 1.1, null, t);
         c.restore();
-        this.ripples(cx, waterY, T, t + (phase || 0));
+        this.ripples(cx, waterY, T, t + (phase || 0), c);
         return;
       }
       D.person(c, look, e.dir, cx, foot, T, phase, t);
@@ -846,8 +1365,22 @@
       } else D.person(c, "hero", "up", W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s, null, t);
     },
 
-    ripples(cx, y, s, t) {
-      const c = this.ctx;
+    /** A little speech bubble (little brother's chatter). */
+    speech(c, text, x, y) {
+      c.save();
+      c.font = `${Math.round(this.T * 0.36)}px "Patrick Hand", sans-serif`;
+      const w = c.measureText(text).width + this.T * 0.4, h = this.T * 0.55;
+      const bx = Math.max(6, Math.min(this.W - w - 6, x - w / 2)), by = y - h;
+      c.fillStyle = "#FFFDF7"; c.strokeStyle = "#3A3330"; c.lineWidth = 2;
+      c.beginPath(); c.roundRect(bx, by, w, h, h / 2); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(x - 5, by + h - 1); c.lineTo(x, by + h + 8); c.lineTo(x + 5, by + h - 1); c.fill();
+      c.beginPath(); c.moveTo(x - 5, by + h); c.lineTo(x, by + h + 8); c.lineTo(x + 5, by + h); c.stroke();
+      c.fillStyle = "#3A3330"; c.textBaseline = "middle"; c.textAlign = "center";
+      c.fillText(text, bx + w / 2, by + h / 2 + 1);
+      c.restore();
+    },
+
+    ripples(cx, y, s, t, c = this.ctx) {
       c.strokeStyle = "rgba(255,255,255,.8)"; c.lineWidth = Math.max(1.5, s * 0.04);
       c.beginPath(); c.ellipse(cx, y, s * 0.42, s * 0.1, 0, 0, Math.PI * 2); c.stroke();
       const k = (t * 0.8) % 1;
@@ -859,18 +1392,16 @@
     /** Water from height fraction top down to the bottom, with little waves. */
     drawWater(top, t) {
       const c = this.ctx, W = this.W, H = this.H;
+      const path = new Path2D();
+      path.moveTo(0, H * top);
+      for (let x = 0; x <= W; x += 10) path.lineTo(x, H * top + Math.sin(x * 0.05 + t * 2) * 3);
+      path.lineTo(W, H); path.lineTo(0, H); path.closePath();
+      D.water(c, this.dpr, path, 0, 0, t);
+      // a little deeper (darker) towards the bottom, lighter near the top
       const g = c.createLinearGradient(0, H * top, 0, H);
-      g.addColorStop(0, "#8ACFE8"); g.addColorStop(1, "#3F8FB8");
-      c.fillStyle = g;
-      c.beginPath(); c.moveTo(0, H * top);
-      for (let x = 0; x <= W; x += 10) c.lineTo(x, H * top + Math.sin(x * 0.05 + t * 2) * 3);
-      c.lineTo(W, H); c.lineTo(0, H); c.closePath(); c.fill();
-      c.strokeStyle = D.C.ink; c.lineWidth = 2.5; c.stroke();
-      c.strokeStyle = "rgba(255,255,255,.55)"; c.lineWidth = 2;
-      for (let i = 0; i < 10; i++) {
-        const x = ((i * 97 + t * 18) % (W + 60)) - 30, y = H * (top + 0.06 + ((i * 37) % 50) / 100);
-        c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 10, y - 4, x + 20, y); c.stroke();
-      }
+      g.addColorStop(0, "rgba(200,240,232,.25)"); g.addColorStop(1, "rgba(25,80,110,.3)");
+      c.fillStyle = g; c.fill(path);
+      c.strokeStyle = "rgba(228,248,243,.95)"; c.lineWidth = 3; c.stroke(path);
     },
 
     drawFishing() {
@@ -987,6 +1518,7 @@
       if (m && this.menuDirty) {
         this.menuDirty = false;
         this.menuEl.dataset.kind = m.kind;
+        if (m.facts) this.menuEl.dataset.facts = "1"; else delete this.menuEl.dataset.facts;
         this.menuEl.replaceChildren(
           h("p", { class: "mtitle", text: m.title }),
           h("div", { class: "mitems", style: { "--cols": m.cols } },
@@ -1007,6 +1539,18 @@
         const hearts = "♥".repeat(b.hearts) + "♡".repeat(FRIENDS_NEEDED - b.hearts);
         if (this.hudHearts.textContent !== hearts) this.hudHearts.textContent = hearts;
       }
+
+      // the quest banner
+      const q = this.quest, Q = q && QUESTS[q.id];
+      this.questEl.hidden = !(Q && this.scene === "world");
+      if (!this.questEl.hidden) {
+        const text = q.have >= Q.need ? `${Q.icon} ${Q.doneBanner || `Bring them to ${Q.toName}!`}` : `${Q.icon} ${Q.title}: ${q.have} / ${Q.need}`;
+        if (this.questEl.textContent !== text) this.questEl.textContent = text;
+      }
+      // room name
+      const rt = this.roomToast;
+      this.roomEl.hidden = !(rt && this.tick < rt.until && this.scene === "world" && !this.dialog);
+      if (!this.roomEl.hidden && this.roomEl.textContent !== rt.text) this.roomEl.textContent = rt.text;
 
       // fishing
       this.fishEl.hidden = !(this.scene === "fishing" && this.fish) || !!this.fade;

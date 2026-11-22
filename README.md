@@ -10,7 +10,7 @@ Money, counting and number games for young kids. Plain HTML, CSS and JavaScript 
 | **Number Path** | Filling in missing numbers, counting by 1, 2, 5 and 10 |
 | **Feed the Snake** | Matching numbers, before/after, bigger/smaller, simple sums |
 | **Snake Chase** | Steering a snake to eat numbers that fit a rule (even, odd, bigger than…) |
-| **Going on an Adventure** | Exploring a little world and making critter friends by answering adding and taking-away questions |
+| **Garter Quest** | Exploring a little world and making critter friends by answering adding and taking-away questions |
 
 Each game has Easy, Medium and Hard levels. Stars and the sound setting are saved in the browser.
 
@@ -40,7 +40,7 @@ assets/coins/       coin pictures
 - Snake Chase: arrow keys or WASD, swipe, tap the board, or use the on-screen arrows. Press Space to pause.
 - Esc goes back to the level picker.
 
-## Going on an Adventure
+## Garter Quest
 
 Home base is Crescent Drive: Our House and Gram's House face each other across the street, and Forbes Bay is to the east. Walk around the neighborhood, ride your bike, swim in the bay and the creek (sea critters live there), go fishing with Uncle Pat at the dock once you answer his math question, talk to people, read signs, and meet critters in the tall grass (every yard is tall grass). Answer 3 questions right to make a critter your friend; 3 wrong answers and it wanders off. Friends are kept in the Critter Book (the ☰ button). Progress is saved in the browser.
 
@@ -57,6 +57,35 @@ Save drawings as PNG with a transparent background in `assets/adventure/`, then 
 - **Ground tiles**: square pictures by map letter. Give a list to vary them so the ground doesn't look repeated.
 - **Objects** (trees, signs, furniture): by map letter, with a size in tiles. The bottom of the picture sits on its tile.
 
+**Quests:** Mom, Dad, Gram and Uncle Pat each have a job. Finish one for 5 stars; while a quest is on, wild critters stay away.
+
+| Quest | From | What to do |
+|---|---|---|
+| Acorns for Hazel | Mom | Find 8 acorns hidden in the yards, bring them to Hazel the squirrel |
+| Pecans for Pip | Dad | Find 6 pecans, bring them to Pip the squirrel |
+| Gram's Garden | Gram | Pull 8 weeds in the garden behind her house; then it blooms |
+| Fish for Uncle Pat | Uncle Pat | Catch 3 fish with his rod for his fish fry |
+
+Quests are data in `QUESTS` in `world.js`: who gives it (`giver`), who it's handed to (`to`), the `kind` (`collect` items hidden in an area, or `fish` caught when fishing), how many, and what everyone says. Anyone with an `id` on a map can give or receive one.
+
+**Animal facts:** when you meet a critter, questions take turns between math and true facts about that animal (`FACTS` in `world.js`). A wrong answer shows the right one with a short explanation.
+
+**Our House** is one floor with a kitchen, dining room and living room; each room's name pops up as you walk in (`rooms` on the map).
+
+**Wagon:** a red wagon waits by Our House. Press A on it and little brother hops in; push him around (a bit faster than walking) while he cheers in speech bubbles. B parks it where you are; it won't go in water or indoors (it parks outside the door).  Uncle Pat's rowboat is tied up at the end of the dock. Face it and press A to climb in, steer around the water, then face the dock or shore and press B to step out; it stays where you leave it. **Sea routes:** a warp with `byBoat: true` only works when you sail onto it, and your boat comes along to the new map, so new places can be reached by water (there's an example in `world.js`).
+
 Controls: drag the joystick to walk, A to talk and choose, B to go back, ☰ for the menu. On a keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M opens the menu.
 
-The Crescent Drive street layout is traced from OpenStreetMap (© OpenStreetMap contributors, ODbL); house positions are placed on typical lots. The credit also appears in the game's menu.
+### The Crescent Drive map
+
+The map is built from a real OpenStreetMap export by `tools/osm_to_map.py`:
+
+```
+python3 tools/osm_to_map.py map.osm > js/games/adventure/crescent-map.js
+```
+
+The tool straightens the map along Crescent Drive, so Crescent runs straight across the middle (south end on the left, north end on the right). Every other street, the creek and Forbes Bay keep where they meet Crescent and which side they're on. OpenStreetMap has no house outlines for these streets, so the tool places houses on lots facing the nearest street, each with a doorstep and driveway. It also picks Our House and Gram's House (a pair facing each other across Crescent), the bike's spot and Uncle Pat's dock on the bay. `world.js` adds the people, signs and story on top. Settings (tile size, how far to include on each side, and so on) are at the top of the tool.
+
+After regenerating, change `layout` on the Crescent map in `world.js` so old saved positions reset to home instead of landing inside a wall.
+
+Map data © OpenStreetMap contributors (ODbL). The credit also appears in the game's menu.
