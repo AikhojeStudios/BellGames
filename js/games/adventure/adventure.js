@@ -1156,8 +1156,12 @@
       if (Input.take("down")) m.i = Math.min(n - 1, m.i + m.cols);
       if (m.cols > 1 && Input.take("left") && m.i % m.cols > 0) m.i--;
       if (m.cols > 1 && Input.take("right") && m.i % m.cols < m.cols - 1 && m.i < n - 1) m.i++;
-      if (m.i !== before) sfx.blip();
-      if (Input.take("a")) { sfx.blip(); m.onPick(m.i); return; }
+      if (m.i !== before || (!m.cursor && Input.dir())) { m.cursor = true; if (m.i !== before) sfx.blip(); }
+      if (Input.take("a")) {
+        // with keys, the first A shows the cursor rather than picking an answer nobody chose
+        if (!m.cursor && !m.tapped) { m.cursor = true; return; }
+        sfx.blip(); m.onPick(m.i); return;
+      }
       if ((Input.take("b") || Input.take("start")) && m.onBack) { sfx.blip(); m.onBack(); }
     },
 
@@ -1673,12 +1677,13 @@
           h("div", { class: "mitems", style: { "--cols": m.cols } },
             m.items.map((it, i) => h("button", {
               type: "button", class: "mitem", text: it,
-              onclick: () => { m.i = i; Input.press("a"); },
+              onclick: () => { m.i = i; m.tapped = true; Input.press("a"); },
             }))),
           ...(m.note ? [h("p", { class: "mnote", text: m.note })] : []),
           ...(m.onBack ? [h("button", { type: "button", class: "mback", text: "Back", onclick: () => Input.press("b") })] : []));
       }
-      if (m) this.menuEl.querySelectorAll(".mitem").forEach((el, i) => el.classList.toggle("sel", i === m.i));
+      // the cursor only shows for keyboard/joystick players, once they start moving it
+      if (m) this.menuEl.querySelectorAll(".mitem").forEach((el, i) => el.classList.toggle("sel", !!m.cursor && i === m.i));
 
       // friendship hearts while meeting a critter
       const b = this.battle;
