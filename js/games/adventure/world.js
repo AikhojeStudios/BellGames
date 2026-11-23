@@ -43,6 +43,13 @@
     "X": { ground: "void", solid: true }, // darkness outside a room
     // inside our house
     "g": { ground: "garden" },                 // Gram's garden bed
+    // the fun park
+    "p": { ground: "parkpath" },               // brick paths
+    "R": { ground: "parkpath", solid: true },  // under a ride (the ride is drawn on top)
+    "E": { ground: "parkpath" },               // the way out
+    "Y": { ground: "parkpath", object: "bench", solid: true },
+    "L": { ground: "parkpath", object: "lamp", solid: true },
+    "G": { ground: "road", solid: true },      // the park's front gate (on Crescent Drive)
     "w": { ground: "innerWall", solid: true }, // walls between rooms
     "k": { ground: "kitchen" },                // kitchen floor tiles
     "q": { ground: "carpet" },                 // bedroom carpet
@@ -168,6 +175,76 @@
 
     // Home base: built from the real street layout (see buildCrescent below).
     crescent: null,
+
+    // The fun park, north of Forbes Bay. You get in by answering questions at the gate.
+    park: {
+      name: "Bayside Fun Park",
+      border: "T",
+      layout: "park-1",
+      tiles: [
+        "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+        "F......................................F",
+        "F.T..................................T.F",
+        "F.................S..............T.....F",
+        "F....RRRRRR.SppppppppppppRRRRRRR.......F",
+        "F....RRRRRR..ppppppppppppRRRRRRR.......F",
+        "F.T..RRRRRR.......pp....SRRRRRRR.....T.F",
+        "F....RRRRRR.......pp.....RRRRRRR.......F",
+        "F....RRRRRR..T.**.pp.**T.RRRRRRR..T....F",
+        "F....RRRRRR.......pp.....RRRRRRR.......F",
+        "F.T....ppY........pp......Ypp........T.F",
+        "F.....Lpp.........pp.......ppL.........F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F..ppL.............pp.............Lpp..F",
+        "F*.pp......T....Y..pp..Y....T......pp.*F",
+        "F..pp..........LppppppppL..........pp..F",
+        "F..pp.....**...ppppRRpppp.....Y..Y.pp..F",
+        "F..pp..........ppppRRpppp...**.RR..pp..F",
+        "F..pp..........LppppppppL......RR..pp..F",
+        "F..pp.......T...Y..pp..Y...T.......pp..F",
+        "F..ppL.............pp.............Lpp..F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F.................LppL.................F",
+        "F......**....*.....pp.....*....**......F",
+        "F.T...T...T........pp........T...T...T.F",
+        "F.................LppL.................F",
+        "F..................pp..................F",
+        "FFFFFFFFFFFFFFFFFFFEEFFFFFFFFFFFFFFFFFFF",
+      ],
+      // big things drawn over their footprint of "R" tiles
+      landmarks: [
+        { kind: "slide", x: 5, y: 4, w: 6, h: 6 },
+        { kind: "wheel", x: 25, y: 4, w: 7, h: 6 },
+        { kind: "fountain", x: 19, y: 17, w: 2, h: 2 },
+        { kind: "popcorn", x: 31, y: 18, w: 2, h: 2 },
+      ],
+      warps: [
+        { x: 19, y: 29, to: "crescent", tx: 0, ty: 0, dir: "down" },   // set by buildCrescent
+        { x: 20, y: 29, to: "crescent", tx: 0, ty: 0, dir: "down" },
+      ],
+      signs: [
+        { x: 12, y: 4, text: ["SUPER SLIDE", "Three twisty lanes! Answer 2 questions in a row to ride."] },
+        { x: 24, y: 6, text: ["FERRIS WHEEL", "See all of Forbes Bay from the top! Answer 3 in a row to ride."] },
+        { x: 18, y: 3, text: ["COMING SOON", "A ROLLER COASTER! Watch this space..."] },
+      ],
+      people: [
+        { x: 8, y: 10, look: "staff", dir: "down", id: "slideHelper", name: "RIDE HELPER", action: "ride", ride: "slide", talk: [
+          "RIDE HELPER: Ready for the SUPER SLIDE?",
+          "Answer 2 questions in a row and up you go!",
+        ] },
+        { x: 27, y: 10, look: "staff2", dir: "down", id: "wheelHelper", name: "RIDE HELPER", action: "ride", ride: "wheel", talk: [
+          "RIDE HELPER: All aboard the FERRIS WHEEL!",
+          "Answer 3 questions in a row to ride all the way around.",
+        ] },
+        { x: 30, y: 19, look: "dad", dir: "left", talk: ["POPCORN SELLER: Popcorn! Get your fresh, hot popcorn!", "Did you know popcorn pops because of the water inside each kernel?"] },
+        { x: 17, y: 24, look: "mom", dir: "right", talk: ["BALLOON LADY: Balloons! Every color of the rainbow!"] },
+        { x: 10, y: 13, look: "friend", dir: "right", wander: true, talk: ["The Ferris wheel is so tall, you can see Uncle Pat's boat from the top!"] },
+        { x: 30, y: 22, look: "friend", dir: "left", wander: true, talk: ["I went down the Super Slide three times! Wheee!"] },
+        { x: 21, y: 20, look: "elder", dir: "down", wander: true, talk: ["I heard they're building a roller coaster up north. How exciting!"] },
+      ],
+    },
   };
 
   /* ---------- Crescent Drive ----------
@@ -223,6 +300,20 @@
     if (garden) {
       for (let y = garden.y0; y <= garden.y1; y++) for (let x = garden.x0; x <= garden.x1; x++) { rows[y][x] = "g"; taken.add(x + "," + y); }
     }
+    // the fun park gate: where the road heads north off the map, closest to the dock
+    const top = rows[0];
+    let gateX = null;
+    for (let d = 0; d < 20 && gateX == null; d++) {
+      for (const x of [sp.dock.start[0] - d, sp.dock.start[0] + d]) {
+        if (top[x] === "=" && top[x + 1] === "=") { gateX = x; break; }
+      }
+    }
+    if (gateX == null) gateX = sp.dock.start[0] - 1;
+    rows[0][gateX] = "G"; rows[0][gateX + 1] = "G";
+    let parkSign = null;
+    for (const x of [gateX + 2, gateX - 1, gateX + 3, gateX - 2]) if (rows[1][x] === "," || rows[1][x] === "-") { rows[1][x] = "S"; parkSign = [x, 1]; break; }
+    for (const w of MAPS.park.warps) { w.tx = gateX + (w.x - 19); w.ty = 1; }
+    if (parkSign) signs.push({ x: parkSign[0], y: parkSign[1], text: ["BAYSIDE FUN PARK", "Up through the gate! Answer 3 questions in a row at the ticket booth to get in."] });
     const hazel = grassNear(ox - 5, sp.ours.land[1] - 2);
     const pip = grassNear(sp.grams.door[0] + 5, sp.grams.land[1] + 3);
     // the wagon waits on the other side of our driveway from the bike
@@ -236,6 +327,10 @@
       // the boat starts tied up at the dock; it's an item you can ride, so its tile is water
       tiles: rows.map((row) => row.join("").replace(/O/g, "~")),
       garden,
+      // big things drawn over the map
+      landmarks: [{ kind: "gate", x: gateX - 1, y: 0, w: 4, h: 1 }],
+      // gates you answer questions at to go through
+      gates: [gateX, gateX + 1].map((x) => ({ x, y: 0, to: "park", tx: 19 + (x - gateX), ty: 27, dir: "up", questions: 3, name: "BAYSIDE FUN PARK" })),
       warps: [
         { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 20, ty: 18, dir: "up" },
         { x: sp.grams.door[0], y: sp.grams.door[1], to: "grams", tx: 4, ty: 6, dir: "up" },
@@ -407,6 +502,13 @@
     return { text: f.q, answer: f.a, choices: shuffle([f.a, ...f.wrong]), fact: true, why: f.why };
   }
 
+  /* ---------- fun park rides ----------
+     Answer this many questions in a row to ride. */
+  const RIDES = {
+    slide: { name: "SUPER SLIDE", questions: 2, frames: 330 },
+    wheel: { name: "FERRIS WHEEL", questions: 3, frames: 520 },
+  };
+
   /* What can bite on Uncle Pat's line. More copies = more often. */
   const CATCHES = ["finny", "finny", "finny", "finny", "pinchy", "pinchy", "shelby", "shelby", "bloop", "boot"];
 
@@ -436,5 +538,5 @@
     return { text: `${a} ${op} ${b} = ?`, answer, choices: shuffle([...choices]) };
   }
 
-  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, FACTS, makeQuestion, makeFact };
+  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, FACTS, RIDES, makeQuestion, makeFact };
 })();
