@@ -68,9 +68,13 @@ Save drawings as PNG with a transparent background in `assets/adventure/`, then 
 
 Quests are data in `QUESTS` in `world.js`: who gives it (`giver`), who it's handed to (`to`), the `kind` (`collect` items hidden in an area, or `fish` caught when fishing), how many, and what everyone says. Anyone with an `id` on a map can give or receive one.
 
-**Animal facts:** when you meet a critter, questions take turns between math and true facts about that animal (`FACTS` in `world.js`). A wrong answer shows the right one with a short explanation.
+**Animal facts:** when you meet a critter, questions take turns between math and true facts about that animal (86 facts in `FACTS` in `world.js`, 5 to 8 per critter). A wrong answer shows the right one with a short explanation.
+
+**Math** (`makeQuestion` in `world.js`) mixes adding and taking away with greater-than questions: "Which is greater: 14 or 9?" and, from Medium up, "Which sign goes in the box: 23 ☐ 17?" (>, < or =). Numbers go up to 10 on Easy, 20 on Medium and 99 on Hard.
 
 **Our House** follows the family's own floor plan: one floor with a living room, kitchen, dining room, study, hallway, three bedrooms (the main one with its own bathroom), a hall bathroom, two closets and a garage with the car. The front door and the garage door both lead out to the driveway. Each room's name pops up as you walk in (`rooms` on the map).
+
+**7 Garters** (the theme park): north of Forbes Bay, where Rivershore Road heads up past Uncle Pat's dock. Answer 3 questions in a row at the ticket booth to get in (one wrong resets the streak). Inside: the Super Slide (2 in a row to ride) and the Ferris Wheel (3 in a row), each a short ride scene worth a star, plus a fountain, popcorn stand, benches, lamps and visitors. Questions mix math at your level with animal facts. Rides are data in `RIDES` in `world.js`; big things like rides are `landmarks` on a map, drawn by `LANDMARKS` in `draw.js` over a footprint of `R` tiles. There's a lot marked "coming soon" for a roller coaster.
 
 **Wagon:** a red wagon waits by Our House. Press A on it and little brother hops in; push him around (a bit faster than walking) while he cheers in speech bubbles. B parks it where you are; it won't go in water or indoors (it parks outside the door).  Uncle Pat's rowboat is tied up at the end of the dock. Face it and press A to climb in, steer around the water, then face the dock or shore and press B to step out; it stays where you leave it. **Sea routes:** a warp with `byBoat: true` only works when you sail onto it, and your boat comes along to the new map, so new places can be reached by water (there's an example in `world.js`).
 

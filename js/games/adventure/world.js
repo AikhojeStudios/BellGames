@@ -43,6 +43,13 @@
     "X": { ground: "void", solid: true }, // darkness outside a room
     // inside our house
     "g": { ground: "garden" },                 // Gram's garden bed
+    // the fun park
+    "p": { ground: "parkpath" },               // brick paths
+    "R": { ground: "parkpath", solid: true },  // under a ride (the ride is drawn on top)
+    "E": { ground: "parkpath" },               // the way out
+    "Y": { ground: "parkpath", object: "bench", solid: true },
+    "L": { ground: "parkpath", object: "lamp", solid: true },
+    "G": { ground: "road", solid: true },      // the park's front gate (on Crescent Drive)
     "w": { ground: "innerWall", solid: true }, // walls between rooms
     "k": { ground: "kitchen" },                // kitchen floor tiles
     "q": { ground: "carpet" },                 // bedroom carpet
@@ -168,6 +175,76 @@
 
     // Home base: built from the real street layout (see buildCrescent below).
     crescent: null,
+
+    // 7 Garters, the theme park north of Forbes Bay. You get in by answering questions at the gate.
+    park: {
+      name: "7 Garters",
+      border: "T",
+      layout: "park-1",
+      tiles: [
+        "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+        "F......................................F",
+        "F.T..................................T.F",
+        "F.................S..............T.....F",
+        "F....RRRRRR.SppppppppppppRRRRRRR.......F",
+        "F....RRRRRR..ppppppppppppRRRRRRR.......F",
+        "F.T..RRRRRR.......pp....SRRRRRRR.....T.F",
+        "F....RRRRRR.......pp.....RRRRRRR.......F",
+        "F....RRRRRR..T.**.pp.**T.RRRRRRR..T....F",
+        "F....RRRRRR.......pp.....RRRRRRR.......F",
+        "F.T....ppY........pp......Ypp........T.F",
+        "F.....Lpp.........pp.......ppL.........F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F..ppL.............pp.............Lpp..F",
+        "F*.pp......T....Y..pp..Y....T......pp.*F",
+        "F..pp..........LppppppppL..........pp..F",
+        "F..pp.....**...ppppRRpppp.....Y..Y.pp..F",
+        "F..pp..........ppppRRpppp...**.RR..pp..F",
+        "F..pp..........LppppppppL......RR..pp..F",
+        "F..pp.......T...Y..pp..Y...T.......pp..F",
+        "F..ppL.............pp.............Lpp..F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F..pppppppppppppppppppppppppppppppppp..F",
+        "F.................LppL.................F",
+        "F......**....*.....pp.....*....**......F",
+        "F.T...T...T........pp........T...T...T.F",
+        "F.................LppL.................F",
+        "F..................pp..................F",
+        "FFFFFFFFFFFFFFFFFFFEEFFFFFFFFFFFFFFFFFFF",
+      ],
+      // big things drawn over their footprint of "R" tiles
+      landmarks: [
+        { kind: "slide", x: 5, y: 4, w: 6, h: 6 },
+        { kind: "wheel", x: 25, y: 4, w: 7, h: 6 },
+        { kind: "fountain", x: 19, y: 17, w: 2, h: 2 },
+        { kind: "popcorn", x: 31, y: 18, w: 2, h: 2 },
+      ],
+      warps: [
+        { x: 19, y: 29, to: "crescent", tx: 0, ty: 0, dir: "down" },   // set by buildCrescent
+        { x: 20, y: 29, to: "crescent", tx: 0, ty: 0, dir: "down" },
+      ],
+      signs: [
+        { x: 12, y: 4, text: ["SUPER SLIDE", "Three twisty lanes! Answer 2 questions in a row to ride."] },
+        { x: 24, y: 6, text: ["FERRIS WHEEL", "See all of Forbes Bay from the top! Answer 3 in a row to ride."] },
+        { x: 18, y: 3, text: ["COMING SOON", "A ROLLER COASTER! Watch this space..."] },
+      ],
+      people: [
+        { x: 8, y: 10, look: "staff", dir: "down", id: "slideHelper", name: "RIDE HELPER", action: "ride", ride: "slide", talk: [
+          "RIDE HELPER: Ready for the SUPER SLIDE?",
+          "Answer 2 questions in a row and up you go!",
+        ] },
+        { x: 27, y: 10, look: "staff2", dir: "down", id: "wheelHelper", name: "RIDE HELPER", action: "ride", ride: "wheel", talk: [
+          "RIDE HELPER: All aboard the FERRIS WHEEL!",
+          "Answer 3 questions in a row to ride all the way around.",
+        ] },
+        { x: 30, y: 19, look: "dad", dir: "left", talk: ["POPCORN SELLER: Popcorn! Get your fresh, hot popcorn!", "Did you know popcorn pops because of the water inside each kernel?"] },
+        { x: 17, y: 24, look: "mom", dir: "right", talk: ["BALLOON LADY: Balloons! Every color of the rainbow!"] },
+        { x: 10, y: 13, look: "friend", dir: "right", wander: true, talk: ["The Ferris wheel is so tall, you can see Uncle Pat's boat from the top!"] },
+        { x: 30, y: 22, look: "friend", dir: "left", wander: true, talk: ["I went down the Super Slide three times! Wheee!"] },
+        { x: 21, y: 20, look: "elder", dir: "down", wander: true, talk: ["I heard 7 Garters is building a roller coaster. How exciting!"] },
+      ],
+    },
   };
 
   /* ---------- Crescent Drive ----------
@@ -223,6 +300,20 @@
     if (garden) {
       for (let y = garden.y0; y <= garden.y1; y++) for (let x = garden.x0; x <= garden.x1; x++) { rows[y][x] = "g"; taken.add(x + "," + y); }
     }
+    // the fun park gate: where the road heads north off the map, closest to the dock
+    const top = rows[0];
+    let gateX = null;
+    for (let d = 0; d < 20 && gateX == null; d++) {
+      for (const x of [sp.dock.start[0] - d, sp.dock.start[0] + d]) {
+        if (top[x] === "=" && top[x + 1] === "=") { gateX = x; break; }
+      }
+    }
+    if (gateX == null) gateX = sp.dock.start[0] - 1;
+    rows[0][gateX] = "G"; rows[0][gateX + 1] = "G";
+    let parkSign = null;
+    for (const x of [gateX + 2, gateX - 1, gateX + 3, gateX - 2]) if (rows[1][x] === "," || rows[1][x] === "-") { rows[1][x] = "S"; parkSign = [x, 1]; break; }
+    for (const w of MAPS.park.warps) { w.tx = gateX + (w.x - 19); w.ty = 1; }
+    if (parkSign) signs.push({ x: parkSign[0], y: parkSign[1], text: ["7 GARTERS THEME PARK", "Up through the gate! Answer 3 questions in a row at the ticket booth to get in."] });
     const hazel = grassNear(ox - 5, sp.ours.land[1] - 2);
     const pip = grassNear(sp.grams.door[0] + 5, sp.grams.land[1] + 3);
     // the wagon waits on the other side of our driveway from the bike
@@ -236,6 +327,10 @@
       // the boat starts tied up at the dock; it's an item you can ride, so its tile is water
       tiles: rows.map((row) => row.join("").replace(/O/g, "~")),
       garden,
+      // big things drawn over the map
+      landmarks: [{ kind: "gate", x: gateX - 1, y: 0, w: 4, h: 1 }],
+      // gates you answer questions at to go through
+      gates: [gateX, gateX + 1].map((x) => ({ x, y: 0, to: "park", tx: 19 + (x - gateX), ty: 27, dir: "up", questions: 3, name: "7 GARTERS" })),
       warps: [
         { x: sp.ours.door[0], y: sp.ours.door[1], to: "home", tx: 20, ty: 18, dir: "up" },
         { x: sp.grams.door[0], y: sp.grams.door[1], to: "grams", tx: 4, ty: 6, dir: "up" },
@@ -343,59 +438,111 @@
       { q: "What do rabbits love to eat?", a: "Grass and hay", wrong: ["Fish", "Rocks", "Pizza"], why: "Rabbits munch grass, hay and leafy greens." },
       { q: "Why do rabbits have such big ears?", a: "To hear danger far away", wrong: ["To fly", "To swim faster", "To dig holes"], why: "Big ears help rabbits hear danger and stay cool." },
       { q: "What is a baby rabbit called?", a: "A kit", wrong: ["A puppy", "A cub", "A chick"], why: "Baby rabbits are called kits!" },
+      { q: "How do rabbits warn each other about danger?", a: "They thump their back feet", wrong: ["They whistle songs", "They clap their paws", "They bark"], why: "Rabbits thump the ground with their back feet to say 'watch out!'" },
+      { q: "Where do wild rabbits often live?", a: "In underground burrows", wrong: ["In nests in the clouds", "In the ocean", "In beehives"], why: "Many rabbits dig burrows to stay safe and cozy." },
+      { q: "What is a rabbit's happy jump called?", a: "A binky", wrong: ["A cartwheel", "A somersault", "A moonwalk"], why: "A happy rabbit leaps and twists in the air. It's called a binky!" },
+      { q: "Why can rabbits see danger coming from almost anywhere?", a: "Their eyes are on the sides of their head", wrong: ["They have four eyes", "They wear glasses", "They never sleep"], why: "With eyes on the sides of their head, rabbits can see nearly all the way around." },
+      { q: "What's special about a rabbit's teeth?", a: "They never stop growing", wrong: ["They glow at night", "They fall out every week", "They're made of wood"], why: "Rabbits chew hay and twigs all day to keep their teeth short." },
     ],
     squeaks: [
       { q: "Why do mice have whiskers?", a: "To feel their way around", wrong: ["To look fancy", "To catch fish", "To keep warm"], why: "Whiskers help mice feel their way in the dark." },
       { q: "What's special about a mouse's front teeth?", a: "They never stop growing", wrong: ["They glow", "They fall out every day", "They're made of gold"], why: "That's why mice chew so much: it keeps their teeth short!" },
       { q: "When are mice most busy?", a: "At night", wrong: ["At lunchtime", "Only in winter", "Never"], why: "Mice are nocturnal. They come out at night." },
+      { q: "What does a mouse use its long tail for?", a: "Balance", wrong: ["Swimming", "Flying", "Digging"], why: "A mouse's tail helps it balance when it climbs." },
+      { q: "What is a baby mouse called?", a: "A pup", wrong: ["A kitten", "A calf", "A joey"], why: "Baby mice are called pups." },
+      { q: "How do mice talk to each other?", a: "With squeaks, some too high for us to hear", wrong: ["They write notes", "They whistle tunes", "They don't talk at all"], why: "Mice make squeaks, and some are so high that people can't hear them." },
+      { q: "What do mice really like to eat most?", a: "Seeds and grains", wrong: ["Only cheese", "Rocks", "Ice cubes"], why: "Mice mostly eat seeds and grains. Cheese isn't really their favorite!" },
+      { q: "How small a hole can a mouse squeeze through?", a: "About as wide as a pencil", wrong: ["Only a door", "A garage door", "Only open windows"], why: "Mice have bendy bodies and can squeeze through tiny holes." },
     ],
     sprigsnake: [
       { q: "How does a snake smell things?", a: "With its tongue", wrong: ["With its ears", "With its tail", "With its eyes"], why: "Snakes flick their tongues to taste the air." },
       { q: "What do green snakes like to eat?", a: "Bugs like crickets", wrong: ["Pizza", "Grass", "Rocks"], why: "Green snakes eat crickets, caterpillars and spiders." },
       { q: "Why is a green snake green?", a: "To hide in the leaves", wrong: ["It ate paint", "It's cold", "To glow at night"], why: "Its green color is camouflage." },
+      { q: "Can snakes blink?", a: "No, they have no eyelids", wrong: ["Yes, all the time", "Only on Sundays", "Only when sleepy"], why: "Snakes can't blink! A clear scale covers each eye." },
+      { q: "Are green snakes dangerous to people?", a: "No, they're gentle and harmless", wrong: ["Yes, very dangerous", "They breathe fire", "They bite everyone"], why: "Green snakes are shy and harmless." },
+      { q: "Where do green snakes like to hang out?", a: "In bushes and vines", wrong: ["Under the ocean", "In the snow", "On rooftops"], why: "Green snakes climb in plants, often near water." },
+      { q: "How do snakes move without legs?", a: "They push with muscles and belly scales", wrong: ["They roll like wheels", "They jump like frogs", "They fly"], why: "Snakes push with strong muscles and grip the ground with their belly scales." },
     ],
     sootsnake: [
       { q: "What are black rat snakes really good at?", a: "Climbing trees", wrong: ["Flying", "Swimming in the sea", "Digging tunnels"], why: "They can climb right up tree bark!" },
       { q: "Are black rat snakes venomous?", a: "No, they're harmless", wrong: ["Yes, very", "Only on Tuesdays", "Only the babies"], why: "They're not venomous. They squeeze their food instead." },
       { q: "How does a snake grow bigger?", a: "It sheds its skin", wrong: ["It pops", "It eats rocks", "It never grows"], why: "Snakes wiggle out of their old skin as they grow." },
+      { q: "What do black rat snakes like to eat?", a: "Mice and rats", wrong: ["Salad", "Ice cream", "Rocks"], why: "They help farmers by eating mice and rats." },
+      { q: "How do black rat snake babies start life?", a: "They hatch from eggs", wrong: ["They grow on trees", "They fall from clouds", "They're born in a box"], why: "Black rat snakes lay eggs, and the babies hatch in late summer." },
+      { q: "Is a snake warm-blooded like you?", a: "No, it's cold-blooded", wrong: ["Yes, very warm", "It's hot like fire", "It has no blood"], why: "Snakes warm up in the sun because their bodies don't make their own heat." },
+      { q: "What color is a baby black rat snake?", a: "Gray with dark blotches", wrong: ["Bright pink", "Glow-in-the-dark green", "Rainbow striped"], why: "Babies have a gray pattern and turn black as they grow up." },
     ],
     hoodini: [
       { q: "What does a cobra do to look big?", a: "Spreads out its hood", wrong: ["Puffs up like a balloon", "Grows wings", "Sings loudly"], why: "A cobra spreads its neck into a hood to say 'back off!'" },
       { q: "What should you do if you see a wild snake?", a: "Stay back and leave it alone", wrong: ["Give it a hug", "Pick it up", "Pet its head"], why: "Some snakes are venomous. Always keep your distance." },
       { q: "Snakes have no outside ears. How do they 'hear'?", a: "They feel vibrations", wrong: ["With antennas", "With their nose", "They can't at all"], why: "Snakes feel vibrations through the ground." },
+      { q: "Where do cobras live in the wild?", a: "Warm parts of Africa and Asia", wrong: ["Antarctica", "Crescent Drive", "The Moon"], why: "Wild cobras live in warm parts of Africa and Asia." },
+      { q: "Which is the longest venomous snake in the world?", a: "The king cobra", wrong: ["The garden snake", "The rubber snake", "The jump rope snake"], why: "King cobras can grow longer than a car!" },
+      { q: "What can a spitting cobra do?", a: "Spray venom from its fangs", wrong: ["Blow bubbles", "Sing songs", "Spit seeds"], why: "Some cobras spray venom to protect themselves. Always stay far away!" },
+      { q: "When a snake charmer plays the flute, what is the cobra following?", a: "The flute moving", wrong: ["The music's words", "The beat of a drum", "Its favorite song"], why: "Cobras can't hear the tune well. They watch the moving flute." },
     ],
     finny: [
       { q: "How do fish breathe underwater?", a: "With gills", wrong: ["With a snorkel", "They hold their breath", "With their fins"], why: "Gills take air out of the water." },
       { q: "What helps a fish swim?", a: "Its fins and tail", wrong: ["Its whiskers", "Tiny feet", "Its teeth"], why: "Fish wiggle their tails and steer with their fins." },
       { q: "What covers a fish's body?", a: "Scales", wrong: ["Feathers", "Fur", "Leaves"], why: "Slippery scales protect a fish." },
+      { q: "Where do sunfish build their nests?", a: "In the sand at the bottom", wrong: ["In trees", "On the dock", "In the clouds"], why: "Sunfish dads sweep out little nests in the sand with their tails." },
+      { q: "Do fish sleep?", a: "Yes, they rest quietly", wrong: ["Never ever", "Only on land", "Only upside down"], why: "Fish rest, even though they can't close their eyes." },
+      { q: "How do fish feel ripples in the water around them?", a: "A special line along their sides", wrong: ["Their teeth", "A tiny antenna", "Their eyebrows"], why: "A line of sensors along each side, called the lateral line, feels movement nearby." },
+      { q: "What is a big group of fish swimming together called?", a: "A school", wrong: ["A class", "A pack", "A herd"], why: "Fish swim together in a school to stay safe." },
+      { q: "Are fish warm-blooded or cold-blooded?", a: "Cold-blooded", wrong: ["Warm-blooded", "Boiling-blooded", "They have no blood"], why: "Most fish are cold-blooded: they're as warm as the water around them." },
     ],
     pinchy: [
       { q: "Which way do crabs walk?", a: "Sideways", wrong: ["Only backwards", "Upside down", "They hop"], why: "Crabs scuttle sideways." },
       { q: "How many legs does a crab have?", a: "10, counting its claws", wrong: ["2", "4", "100"], why: "Crabs have 10 legs, and 2 of them are claws." },
       { q: "Where is a crab's skeleton?", a: "On the outside, as a shell", wrong: ["In its claws only", "It has none", "In its eyes"], why: "Crabs wear their skeleton on the outside!" },
+      { q: "How does a crab grow bigger?", a: "It sheds its old shell", wrong: ["It blows itself up", "It eats its shell", "It never grows"], why: "Crabs molt: they climb out of their old shell and grow a new one." },
+      { q: "Where are a crab's eyes?", a: "On little stalks", wrong: ["On its claws", "On its belly", "It has no eyes"], why: "Crab eyes sit on stalks so they can look all around." },
+      { q: "What do crabs use their claws for?", a: "Eating and protecting themselves", wrong: ["Flying", "Knitting", "Swimming fast"], why: "Claws help crabs grab food and scare off enemies." },
+      { q: "Can crabs breathe out of the water?", a: "For a while, if their gills stay wet", wrong: ["Never at all", "Only in space", "They don't need to breathe"], why: "Crabs keep their gills damp so they can visit the shore." },
     ],
     shelby: [
       { q: "Can a turtle climb out of its shell?", a: "No, it's part of its body", wrong: ["Yes, to take a bath", "Only at night", "Yes, to trade shells"], why: "A turtle's shell grows with it." },
       { q: "Do turtles breathe air?", a: "Yes, they swim up for air", wrong: ["No, they have gills", "Only on Sundays", "They never breathe"], why: "Turtles come up to the surface to breathe." },
       { q: "How do baby turtles start life?", a: "They hatch from eggs", wrong: ["They grow on trees", "They fall from clouds", "From a shell store"], why: "Mama turtles lay their eggs in sand or dirt." },
+      { q: "What is the top of a turtle's shell called?", a: "The carapace", wrong: ["The roof", "The helmet", "The lid"], why: "The top shell is the carapace. The bottom is the plastron." },
+      { q: "Do turtles have teeth?", a: "No, they have a hard beak", wrong: ["Yes, sharp ones", "Gold teeth", "Only baby teeth"], why: "Turtles bite with a hard beak instead of teeth." },
+      { q: "How long can some turtles live?", a: "More than 100 years", wrong: ["One week", "Two days", "Exactly 5 years"], why: "Some turtles live more than 100 years!" },
+      { q: "What do many pond turtles do when winter comes?", a: "Rest in the mud at the bottom", wrong: ["Fly south", "Knit sweaters", "Build a campfire"], why: "Many pond turtles rest in the mud under the water all winter." },
+      { q: "Where do sea turtle mothers lay their eggs?", a: "On sandy beaches", wrong: ["In tree nests", "At the bottom of the sea", "In caves on mountains"], why: "Sea turtles crawl up onto sandy beaches to lay their eggs." },
     ],
     bloop: [
       { q: "Does a jellyfish have a brain?", a: "No, no brain at all", wrong: ["A huge brain", "Two brains", "A brain in its hat"], why: "Jellyfish have no brain, heart or bones!" },
       { q: "What is a jellyfish mostly made of?", a: "Water", wrong: ["Jelly", "Rubber", "Candy"], why: "A jellyfish is about 95 out of 100 parts water!" },
       { q: "Should you touch a jellyfish?", a: "No, it can sting", wrong: ["Yes, it's soft", "Only with your toes", "Yes, it tickles"], why: "Jellyfish can sting, even when they wash up on the beach." },
+      { q: "How long have jellyfish been on Earth?", a: "Longer than the dinosaurs", wrong: ["Since last year", "Only 10 years", "Since TV was invented"], why: "Jellyfish have been around for more than 500 million years!" },
+      { q: "How does a jellyfish swim?", a: "By squeezing its bell", wrong: ["With fins", "With legs", "With a tiny motor"], why: "A jellyfish squeezes its bell to push water and move." },
+      { q: "What does a jellyfish use to catch food?", a: "Stinging tentacles", wrong: ["A net", "Its teeth", "A fishing rod"], why: "Tentacles sting tiny animals so the jellyfish can eat them." },
+      { q: "Can some jellyfish glow?", a: "Yes, some glow in the dark", wrong: ["No, never", "Only on birthdays", "Only in jars"], why: "Some jellyfish make their own light. That's called bioluminescence!" },
     ],
     flitter: [
       { q: "When do most moths fly?", a: "At night", wrong: ["Only at noon", "Never", "Only in the rain"], why: "Most moths come out at night and love bright lights." },
       { q: "What do moths smell with?", a: "Their antennae", wrong: ["Their wings", "Their feet", "Their nose"], why: "Moth antennae can smell from far away." },
       { q: "What does a moth start life as?", a: "A caterpillar", wrong: ["A ladybug", "A worm", "A fish"], why: "Caterpillars spin cocoons and turn into moths." },
+      { q: "How can you often tell a moth from a butterfly?", a: "Moths usually have feathery antennae", wrong: ["Moths have ten wings", "Moths are fish", "There's no difference"], why: "Moths often have feathery antennae. Butterflies have thin ones with little knobs." },
+      { q: "What covers a moth's wings?", a: "Tiny scales", wrong: ["Feathers", "Long fur", "Glitter glue"], why: "Moth wings are covered in tiny scales, like dust." },
+      { q: "What does a moth caterpillar spin before it changes?", a: "A cocoon", wrong: ["A spider web", "A scarf", "A trampoline"], why: "Caterpillars spin a silky cocoon, then come out as moths." },
+      { q: "Which caterpillar spins silk that people make clothes from?", a: "The silkworm", wrong: ["The inchworm", "The bookworm", "The earthworm"], why: "Silkworms spin silk that people weave into cloth." },
+      { q: "What's strange about a grown-up luna moth?", a: "It has no mouth", wrong: ["It has two heads", "It barks", "It can swim"], why: "Adult luna moths don't eat at all. They live only about a week." },
     ],
     mossy: [
       { q: "Does moss grow flowers?", a: "No, it spreads with spores", wrong: ["Yes, big red ones", "Only in winter", "Yes, candy flowers"], why: "Moss spreads with tiny spores instead of seeds." },
       { q: "Where does moss like to grow?", a: "Damp, shady places", wrong: ["In ovens", "On clouds", "In the hot desert sun"], why: "Moss loves cool, damp, shady spots." },
+      { q: "Does moss have roots?", a: "No, it has tiny threads instead", wrong: ["Yes, huge roots", "Roots made of gold", "Roots that float"], why: "Moss holds on with tiny threads called rhizoids." },
+      { q: "What can moss soak up like a sponge?", a: "Water", wrong: ["Sand", "Noise", "Moonlight"], why: "Moss can hold lots of water, which keeps the ground damp." },
+      { q: "Is moss a plant?", a: "Yes, a tiny plant", wrong: ["No, it's an animal", "It's a rock", "It's a cloud"], why: "Moss is one of the oldest kinds of plants on Earth." },
     ],
     pebblet: [
       { q: "What slowly wears big rocks down into sand?", a: "Wind and water", wrong: ["Moonlight", "Singing", "Sleeping"], why: "Wind and water wear rocks down over a very long time." },
       { q: "What is very hot melted rock called?", a: "Lava", wrong: ["Soup", "Ice", "Slime"], why: "Lava cools down and turns into new rock!" },
+      { q: "What are the three main kinds of rock?", a: "Igneous, sedimentary, metamorphic", wrong: ["Big, small, medium", "Red, blue, green", "Hard, soft, squishy"], why: "Rocks are made by fire, by layers, or by heat and squeezing." },
+      { q: "What rock is made of layers of sand pressed together?", a: "Sandstone", wrong: ["Lava rock", "Ice", "Chalkboard"], why: "Sandstone forms when layers of sand get pressed together over a long time." },
+      { q: "What is the hardest natural mineral?", a: "Diamond", wrong: ["Chalk", "Butter", "Soap"], why: "Diamonds are the hardest natural thing on Earth." },
+      { q: "Which rock can float on water?", a: "Pumice", wrong: ["Granite", "Marble", "Brick"], why: "Pumice is full of tiny air bubbles, so it floats!" },
     ],
   };
 
@@ -407,13 +554,42 @@
     return { text: f.q, answer: f.a, choices: shuffle([f.a, ...f.wrong]), fact: true, why: f.why };
   }
 
+  /* ---------- fun park rides ----------
+     Answer this many questions in a row to ride. */
+  const RIDES = {
+    slide: { name: "SUPER SLIDE", questions: 2, frames: 330 },
+    wheel: { name: "FERRIS WHEEL", questions: 3, frames: 520 },
+  };
+
   /* What can bite on Uncle Pat's line. More copies = more often. */
   const CATCHES = ["finny", "finny", "finny", "finny", "pinchy", "pinchy", "shelby", "shelby", "bloop", "boot"];
 
   const START = { map: "home", x: 20, y: 18, dir: "up" };
 
   /* ---------- questions, by level ---------- */
+  /**
+   * Greater-than questions: "Which is greater: 14 or 9?" or, from Medium up,
+   * "Which sign goes in the box: 23 ☐ 17?" (>, < or =). Hard uses bigger
+   * numbers and sometimes equal pairs.
+   */
+  function makeCompare(mode) {
+    const [lo, hi] = mode === "easy" ? [0, 10] : mode === "medium" ? [0, 20] : [10, 99];
+    const a = randInt(lo, hi);
+    let b = randInt(lo, hi);
+    if (mode === "easy" || Math.random() < 0.45) {
+      while (b === a) b = randInt(lo, hi);
+      const big = Math.max(a, b), small = Math.min(a, b);
+      return { text: `Which is greater: ${a} or ${b}?`, answer: big, choices: [a, b], why: `${big} is greater than ${small}.` };
+    }
+    if (mode === "hard" && Math.random() < 0.2) b = a;
+    const sign = a > b ? ">" : a < b ? "<" : "=";
+    const words = { ">": "is greater than", "<": "is less than", "=": "is equal to" };
+    const tip = sign === "=" ? "They're the same, so the sign is =." : "The open mouth always eats the bigger number!";
+    return { text: `Which sign goes in the box?  ${a} ☐ ${b}`, answer: sign, choices: [">", "<", "="], why: `${a} ${sign} ${b}: ${a} ${words[sign]} ${b}. ${tip}` };
+  }
+
   function makeQuestion(mode) {
+    if (Math.random() < 0.3) return makeCompare(mode);
     let a, b, op;
     if (mode === "easy") {
       op = "+"; a = randInt(0, 5); b = randInt(1, 5);
@@ -436,5 +612,5 @@
     return { text: `${a} ${op} ${b} = ?`, answer, choices: shuffle([...choices]) };
   }
 
-  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, FACTS, makeQuestion, makeFact };
+  A.world = { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, FACTS, RIDES, makeQuestion, makeFact };
 })();

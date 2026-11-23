@@ -272,6 +272,15 @@
     void(c, s) { c.fillStyle = C.dark; c.fillRect(0, 0, s, s); },
     garden(c, s, r, same) { gardenBed(c, s, r, same, false); },
     gardenBloom(c, s, r, same) { gardenBed(c, s, r, same, true); },
+    parkpath(c, s, r) {
+      c.fillStyle = "#E7C9A0"; c.fillRect(0, 0, s, s);
+      c.strokeStyle = "#CFA978"; c.lineWidth = s * 0.03;
+      for (let row = 0; row < 4; row++) {
+        const y = (row * s) / 4;
+        c.beginPath(); c.moveTo(0, y); c.lineTo(s, y); c.stroke();
+        for (let k = 0; k < 2; k++) { const x = ((k + (row % 2) * 0.5) * s) / 2; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + s / 4); c.stroke(); }
+      }
+    },
     carpet(c, s, r) {
       c.fillStyle = "#CFC3DD"; c.fillRect(0, 0, s, s);
       for (let i = 0; i < 14; i++) { c.fillStyle = i % 2 ? "rgba(255,255,255,.35)" : "rgba(90,70,120,.12)"; c.fillRect(r() * s, r() * s, s * 0.03, s * 0.03); }
@@ -464,6 +473,18 @@
         c.fillStyle = "#7A5634"; c.fillRect(s * 0.1, y + s * 0.36, s * 0.8, s * 0.04);
         for (let i = 0; i < 5; i++) { c.fillStyle = cols[(i + row) % 5]; c.fillRect(s * (0.14 + i * 0.15), y + s * (0.08 + (i % 2) * 0.04), s * 0.11, s * (0.28 - (i % 2) * 0.04)); }
       }
+    },
+    bench(c, s) {
+      ellipse(c, s / 2, s * 0.85, s * 0.4, s * 0.08); paint(c, "rgba(0,0,0,.15)");
+      c.fillStyle = "#3A3330"; c.fillRect(s * 0.15, s * 0.5, s * 0.06, s * 0.35); c.fillRect(s * 0.79, s * 0.5, s * 0.06, s * 0.35);
+      c.beginPath(); c.roundRect(s * 0.08, s * 0.15, s * 0.84, s * 0.18, s * 0.04); paint(c, "#62A24C", s * 0.035);
+      c.beginPath(); c.roundRect(s * 0.06, s * 0.4, s * 0.88, s * 0.18, s * 0.04); paint(c, "#62A24C", s * 0.035);
+    },
+    lamp(c, s) {
+      ellipse(c, s / 2, s * 0.88, s * 0.2, s * 0.06); paint(c, "rgba(0,0,0,.15)");
+      c.fillStyle = "#3A3330"; c.fillRect(s * 0.46, -s * 0.6, s * 0.08, s * 1.45);
+      c.beginPath(); c.roundRect(s * 0.32, -s * 0.85, s * 0.36, s * 0.3, s * 0.08); paint(c, "#FFE9A6", s * 0.035);
+      ellipse(c, s / 2, s * 0.86, s * 0.14, s * 0.05); paint(c, "#3A3330");
     },
     desk(c, s, r, same) {
       const x0 = same(-1, 0) ? -1 : s * 0.04, x1 = same(1, 0) ? s + 1 : s * 0.96;
@@ -661,6 +682,8 @@
     mom: { shirt: "#F28DA8", pants: "#4A6FA5", skin: "#7A4A2E", hair: "#1C1310", long: true },
     dad: { shirt: "#3E6E9E", pants: "#4A4A55", skin: "#6E4128", hair: "#1C1310", beard: true },
     elder: { shirt: "#8E7CC3", pants: "#5A5A5A", skin: "#7A4A2E", hair: "#E8E4DC", glasses: true },
+    staff: { shirt: "#D9433B", pants: "#3A3A42", skin: "#C98E63", hair: "#2B1D14", cap: "#F7D35C" },
+    staff2: { shirt: "#D9433B", pants: "#3A3A42", skin: "#F0C8A8", hair: "#7A4B2A", cap: "#F7D35C" },
     uncle: { shirt: "#4F86B0", pants: "#6B5B4B", skin: "#E0AC85", hair: "#8B5A2B", hat: "#C9B27C", beard: true },
   };
 
@@ -1238,6 +1261,138 @@
   }
   OBJECTS.wagon = (c, s) => wagon(c, s / 2, s * 0.92, s, "right", 0, 0, false, null);
 
+  /* ---------- landmarks: big things drawn over a footprint of tiles ----------
+     Each gets (ctx, x, y, w, h, T, t): the footprint's top-left and size in
+     pixels, the tile size, and the time in seconds. They may rise above it. */
+
+  /** A point along one of the Super Slide's lanes, k from 0 (top) to 1 (bottom). */
+  function slidePoint(x, y, w, h, T, lane, k) {
+    const sx = x + T * 1.9, sy = y - T * 0.9 + lane * T * 0.15;
+    const ex = x + w - T * 0.4, ey = y + h - T * 0.6 - lane * T * 0.05;
+    const px = sx + (ex - sx) * k;
+    const py = sy + (ey - sy) * (k * k * 0.6 + k * 0.4) - Math.sin(k * Math.PI * 3) * T * 0.35 * (1 - k);
+    return [px + lane * T * 0.42 * (1 - k * 0.3), py];
+  }
+
+  const LANDMARKS = {
+    slide(c, x, y, w, h, T, t) {
+      const lw = Math.max(1.5, T * 0.05);
+      ellipse(c, x + w / 2, y + h - T * 0.3, w * 0.48, T * 0.35); paint(c, "rgba(0,0,0,.14)");
+      // tower with a ladder and a striped roof
+      const tx = x + T * 0.3, tw = T * 1.6, ttop = y - T * 1.1;
+      c.beginPath(); c.roundRect(tx, ttop, tw, y + h - T * 0.3 - ttop, T * 0.1); paint(c, "#F2B544", lw);
+      c.strokeStyle = "#A4774A"; c.lineWidth = lw;
+      for (let k = ttop + T * 0.4; k < y + h - T * 0.4; k += T * 0.45) { c.beginPath(); c.moveTo(tx + T * 0.4, k); c.lineTo(tx + T * 1.2, k); c.stroke(); }
+      c.beginPath(); c.moveTo(tx + T * 0.4, ttop + T * 0.2); c.lineTo(tx + T * 0.4, y + h - T * 0.3); c.moveTo(tx + T * 1.2, ttop + T * 0.2); c.lineTo(tx + T * 1.2, y + h - T * 0.3); c.stroke();
+      c.beginPath(); c.moveTo(tx - T * 0.25, ttop + T * 0.05); c.lineTo(tx + tw / 2, ttop - T * 0.9); c.lineTo(tx + tw + T * 0.25, ttop + T * 0.05); c.closePath(); paint(c, "#D9433B", lw);
+      c.fillStyle = "#FFFFFF";
+      for (let i = 1; i < 4; i++) { c.beginPath(); c.moveTo(tx + tw / 2, ttop - T * 0.9); c.lineTo(tx - T * 0.25 + (i * (tw + T * 0.5)) / 4 - T * 0.08, ttop + T * 0.05); c.lineTo(tx - T * 0.25 + (i * (tw + T * 0.5)) / 4 + T * 0.08, ttop + T * 0.05); c.closePath(); c.fill(); }
+      // flag on top
+      c.fillStyle = "#3A3330"; c.fillRect(tx + tw / 2 - 1, ttop - T * 1.5, 2, T * 0.6);
+      c.fillStyle = "#5EC2E8"; c.beginPath(); c.moveTo(tx + tw / 2, ttop - T * 1.5); c.lineTo(tx + tw / 2 + T * 0.4 + Math.sin(t * 5) * T * 0.05, ttop - T * 1.35); c.lineTo(tx + tw / 2, ttop - T * 1.2); c.fill();
+      // three wavy lanes
+      ["#D9433B", "#F7D35C", "#4F86B0"].forEach((col, lane) => {
+        const pts = Array.from({ length: 31 }, (_, i) => slidePoint(x, y, w, h, T, lane, i / 30));
+        const run = (width, color) => { c.beginPath(); pts.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.lineCap = c.lineJoin = "round"; c.lineWidth = width; c.strokeStyle = color; c.stroke(); };
+        run(T * 0.42, C.ink); run(T * 0.34, col); run(T * 0.08, "rgba(255,255,255,.45)");
+      });
+      // landing pad
+      c.beginPath(); c.roundRect(x + w - T * 1.6, y + h - T * 0.75, T * 1.5, T * 0.55, T * 0.15); paint(c, "#62A24C", lw);
+    },
+
+    wheel(c, x, y, w, h, T, t, turn = t * 0.25, mark = -1) {
+      const lw = Math.max(1.5, T * 0.05);
+      const cx = x + w / 2, cy = y + h - T * 3.3, R = T * 3;
+      ellipse(c, cx, y + h - T * 0.3, w * 0.45, T * 0.35); paint(c, "rgba(0,0,0,.14)");
+      // legs
+      c.strokeStyle = C.ink; c.lineWidth = T * 0.22; c.lineCap = "round";
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx - T * 1.8, y + h - T * 0.35); c.moveTo(cx, cy); c.lineTo(cx + T * 1.8, y + h - T * 0.35); c.stroke();
+      c.strokeStyle = "#8E7CC3"; c.lineWidth = T * 0.14;
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx - T * 1.8, y + h - T * 0.35); c.moveTo(cx, cy); c.lineTo(cx + T * 1.8, y + h - T * 0.35); c.stroke();
+      // rim and spokes
+      c.strokeStyle = C.ink; c.lineWidth = T * 0.16; c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = "#F28DA8"; c.lineWidth = T * 0.09; c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = "rgba(58,51,48,.6)"; c.lineWidth = lw * 0.8;
+      for (let i = 0; i < 16; i++) { const a = turn + (i * Math.PI) / 8; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); c.stroke(); }
+      // twinkling lights on the rim
+      for (let i = 0; i < 24; i++) {
+        const a = turn + (i * Math.PI) / 12;
+        c.fillStyle = (i + Math.floor(t * 4)) % 3 ? "#FFF4B8" : "#FFFFFF";
+        c.beginPath(); c.arc(cx + Math.cos(a) * R, cy + Math.sin(a) * R, T * 0.06, 0, Math.PI * 2); c.fill();
+      }
+      ellipse(c, cx, cy, T * 0.35, T * 0.35); paint(c, "#F7D35C", lw);
+      // cars hang level as the wheel turns
+      const colors = ["#D9433B", "#4F86B0", "#62A24C", "#F2B544", "#7C5CD6", "#FF7A59", "#5EC2E8", "#E25636"];
+      for (let i = 0; i < 8; i++) {
+        const a = turn + (i * Math.PI) / 4;
+        const gx = cx + Math.cos(a) * R, gy = cy + Math.sin(a) * R;
+        c.strokeStyle = C.ink; c.lineWidth = lw; c.beginPath(); c.moveTo(gx, gy); c.lineTo(gx, gy + T * 0.25); c.stroke();
+        c.beginPath(); c.roundRect(gx - T * 0.38, gy + T * 0.25, T * 0.76, T * 0.5, T * 0.14); paint(c, colors[i], lw);
+        c.fillStyle = "rgba(255,255,255,.7)"; c.fillRect(gx - T * 0.26, gy + T * 0.32, T * 0.52, T * 0.14);
+        if (i === mark) { c.strokeStyle = "#FFE9A6"; c.lineWidth = lw * 2; c.beginPath(); c.roundRect(gx - T * 0.45, gy + T * 0.18, T * 0.9, T * 0.64, T * 0.16); c.stroke(); }
+      }
+      return { cx, cy, R };
+    },
+
+    fountain(c, x, y, w, h, T, t) {
+      const cx = x + w / 2, cy = y + h / 2 + T * 0.2;
+      ellipse(c, cx, cy, w * 0.48, h * 0.4); paint(c, "#D8D2C4", T * 0.05);
+      ellipse(c, cx, cy, w * 0.4, h * 0.32); paint(c, "#7CC4E4");
+      ellipse(c, cx, cy - T * 0.2, T * 0.2, T * 0.12); paint(c, "#D8D2C4", T * 0.04);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2, k = ((t * 1.2 + i * 0.1) % 1);
+        const px = cx + Math.cos(a) * k * T * 0.8, py = cy - T * 0.3 - Math.sin(k * Math.PI) * T * 1.1 + Math.sin(a) * k * T * 0.3;
+        c.fillStyle = `rgba(255,255,255,${1 - k * 0.6})`; c.beginPath(); c.arc(px, py, T * 0.07, 0, Math.PI * 2); c.fill();
+      }
+    },
+
+    popcorn(c, x, y, w, h, T) {
+      const lw = Math.max(1.5, T * 0.05);
+      c.beginPath(); c.roundRect(x + T * 0.15, y + T * 0.6, w - T * 0.3, h - T * 0.8, T * 0.1); paint(c, "#FFFFFF", lw);
+      c.fillStyle = "#D9433B";
+      for (let i = 0; i < 4; i++) c.fillRect(x + T * 0.25 + i * (w - T * 0.5) / 4, y + T * 0.65, (w - T * 0.5) / 8, h - T * 0.9);
+      // striped awning on poles
+      c.fillStyle = C.ink; c.fillRect(x + T * 0.2, y - T * 0.6, T * 0.08, T * 1.3); c.fillRect(x + w - T * 0.28, y - T * 0.6, T * 0.08, T * 1.3);
+      for (let i = 0; i < 6; i++) {
+        c.beginPath(); c.moveTo(x + (i * w) / 6, y - T * 0.6); c.lineTo(x + ((i + 1) * w) / 6, y - T * 0.6); c.lineTo(x + ((i + 0.5) * w) / 6, y - T * 0.25); c.closePath();
+        paint(c, i % 2 ? "#FFFFFF" : "#D9433B", lw * 0.6);
+      }
+      // a big tub of popcorn
+      c.beginPath(); c.moveTo(x + w / 2 - T * 0.3, y + T * 0.1); c.lineTo(x + w / 2 + T * 0.3, y + T * 0.1); c.lineTo(x + w / 2 + T * 0.22, y + T * 0.65); c.lineTo(x + w / 2 - T * 0.22, y + T * 0.65); c.closePath(); paint(c, "#D9433B", lw);
+      for (let i = 0; i < 7; i++) { ellipse(c, x + w / 2 - T * 0.25 + (i % 4) * T * 0.16, y + T * 0.08 - Math.floor(i / 4) * T * 0.12, T * 0.1, T * 0.09); paint(c, "#FFF6D6", lw * 0.5); }
+    },
+
+    gate(c, x, y, w, h, T, t) {
+      const lw = Math.max(1.5, T * 0.05);
+      // two striped pillars
+      for (const px of [x + T * 0.15, x + w - T * 0.75]) {
+        c.beginPath(); c.roundRect(px, y - T * 1.6, T * 0.6, T * 2.5, T * 0.08); paint(c, "#FFFFFF", lw);
+        c.fillStyle = "#D9433B";
+        for (let k = 0; k < 5; k++) c.fillRect(px + lw / 2, y - T * 1.5 + k * T * 0.5, T * 0.6 - lw, T * 0.22);
+        c.fillStyle = C.ink; c.fillRect(px + T * 0.28, y - T * 2.4, 2, T * 0.8);
+        c.fillStyle = ["#F7D35C", "#5EC2E8"][px > x + T ? 1 : 0];
+        c.beginPath(); c.moveTo(px + T * 0.3, y - T * 2.4); c.lineTo(px + T * 0.75 + Math.sin(t * 5 + px) * T * 0.06, y - T * 2.25); c.lineTo(px + T * 0.3, y - T * 2.1); c.fill();
+      }
+      // the arch and its sign
+      c.beginPath(); c.roundRect(x - T * 0.1, y - T * 2.05, w + T * 0.2, T * 0.75, T * 0.3); paint(c, "#7C5CD6", lw);
+      c.font = `bold ${Math.round(T * 0.42)}px Fredoka, Nunito, sans-serif`;
+      c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#FFE9A6";
+      c.fillText("7 GARTERS", x + w / 2, y - T * 1.67);
+      c.textAlign = "start"; c.textBaseline = "alphabetic";
+      // lights along the arch
+      for (let i = 0; i < 8; i++) {
+        c.fillStyle = (i + Math.floor(t * 3)) % 2 ? "#FFF4B8" : "#F28DA8";
+        c.beginPath(); c.arc(x + (i + 0.5) * (w / 8), y - T * 2.05, T * 0.07, 0, Math.PI * 2); c.fill();
+      }
+      // a ticket booth window
+      c.beginPath(); c.roundRect(x + w / 2 - T * 0.45, y - T * 1.1, T * 0.9, T * 0.75, T * 0.1); paint(c, "#F2B544", lw);
+      c.fillStyle = "#BFE3F2"; c.fillRect(x + w / 2 - T * 0.3, y - T * 1.0, T * 0.6, T * 0.35);
+      c.font = `${Math.round(T * 0.22)}px "Patrick Hand", sans-serif`; c.textAlign = "center"; c.fillStyle = C.ink;
+      c.fillText("TICKETS", x + w / 2, y - T * 0.45); c.textAlign = "start";
+    },
+  };
+  function landmark(c, kind, x, y, w, h, T, t) { LANDMARKS[kind]?.(c, x, y, w, h, T, t); }
+
   /** A solid silhouette of a critter (for ones you've met but not befriended). */
   function silhouette(id, w, hh, color) {
     const cv = document.createElement("canvas");
@@ -1250,5 +1405,5 @@
     return cv;
   }
 
-  A.draw = { C, ground, object, person, critter, silhouette, water, boat, wagon, pickup, blob, rectPts, ellipsePts, rng, paint, line };
+  A.draw = { C, ground, object, person, critter, silhouette, water, boat, wagon, pickup, landmark, LANDMARKS, slidePoint, blob, rectPts, ellipsePts, rng, paint, line };
 })();

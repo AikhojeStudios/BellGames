@@ -13,7 +13,7 @@
   const { h, pick, randInt } = App.util;
   const AD = App.Adventure;
   const D = AD.draw;
-  const { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, makeQuestion, makeFact } = AD.world;
+  const { TILES, CRITTERS, MAPS, START, CATCHES, QUESTS, QUEST_STARS, GIVERS, FACTS, RIDES, makeQuestion, makeFact } = AD.world;
 
   const STEP = 14;            // frames to walk one tile
   const BIKE_STEP = 8;        // frames to ride one tile
@@ -365,6 +365,7 @@
       else if (this.scene === "battle") this.updateBattle();
       else if (this.scene === "book") this.updateBook();
       else if (this.scene === "fishing") this.updateFishing();
+      else if (this.scene === "ride") this.updateRide();
       if (this.scene === "world") this.updatePeople();
       this.updateFx();
       Input.pressed.clear();
@@ -427,6 +428,135 @@
       p.x = nx; p.y = ny;
       p.moving = true; p.t = 0; p.leg ^= 1; p.dur = this.stepTime(nx, ny);
       p.ease = !this.boating && (this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim);
+    },
+
+    /* ---------------- question streaks (park gate and rides) ---------------- */
+    /**
+     * Ask questions until n are answered right in a row; one wrong resets the
+     * streak (with an offer to try again). Mostly math at the player's level,
+     * with some animal facts mixed in.
+     */
+    quiz(n, intro, onWin) {
+      let streak = 0;
+      const ids = Object.keys(FACTS);
+      const ask = () => {
+        const q = (Math.random() < 0.35 && makeFact(pick(ids))) || makeQuestion(this.mode);
+        this.quizQ = q;
+        this.openMenu({
+          kind: "answers",
+          facts: !!q.fact,
+          title: q.text,
+          items: q.choices.map(String),
+          cols: q.fact ? 1 : 2,
+          note: `${streak} of ${n} in a row`,
+          onPick: (i) => {
+            this.menu = null;
+            const why = q.why || q.text.replace("?", q.answer);
+            if (q.choices[i] === q.answer) {
+              streak++;
+              sfx.right();
+              if (streak >= n) return this.say([`Yes! ${why}`, `That's ${n} in a row!`], onWin);
+              return this.say([`Yes! ${why}`, `${streak} in a row! ${n - streak} more to go.`], ask);
+            }
+            App.Sound.miss();
+            streak = 0;
+            this.say([`Not quite. ${q.fact ? `It's "${q.answer}". ` : ""}${why}`, `You need ${n} in a row.`], () => this.openMenu({
+              kind: "choice", title: "Try again?", items: ["Yes!", "Not now"],
+              onPick: (j) => { this.menu = null; if (j === 0) ask(); },
+              onBack: () => { this.menu = null; },
+            }));
+          },
+          onBack: () => { this.menu = null; },
+        });
+      };
+      this.say(intro, ask);
+    },
+
+    enterGate(gate) {
+      // bikes and wagons wait outside
+      const p = this.player;
+      if (this.riding) this.getOff(p.x, p.y);
+      if (this.wagoning) this.parkWagon(p.x, p.y);
+      App.Sound.win();
+      this.transition(() => {
+        this.loadMap(gate.to, gate.tx, gate.ty, gate.dir);
+        this.save();
+        this.say([`Welcome to ${gate.name}!`, "Ride the SUPER SLIDE and the FERRIS WHEEL. Talk to a ride helper to get on."]);
+      });
+    },
+
+    startRide(kind) {
+      this.transition(() => {
+        this.scene = "ride";
+        this.ride = { kind, t: 0, frames: RIDES[kind].frames, back: { x: this.player.x, y: this.player.y, dir: this.player.dir } };
+      });
+    },
+
+    updateRide() {
+      const r = this.ride;
+      r.t++;
+      if (r.kind === "slide" && r.t === 120) [880, 784, 659, 523, 392].forEach((f, i) => tone(f, 0.18, "triangle", 0.1, i * 0.12));
+      if (r.kind === "wheel" && r.t % 90 === 0) tone(523 + (r.t / 90) * 66, 0.15, "sine", 0.06);
+      const skip = r.t > 60 && Input.take("b");
+      if ((r.t >= r.frames || skip) && !r.done) {
+        r.done = true;
+        this.ui.award({ celebrate: false });
+        App.Sound.win();
+        const R = RIDES[r.kind];
+        this.transition(() => {
+          this.scene = "world";
+          this.ride = null;
+          this.say([r.kind === "slide" ? "WHEEE! That was awesome!" : "What a view! You could see all of Forbes Bay!", `You rode the ${R.name} and earned a star!`]);
+        });
+      }
+    },
+
+    drawRide() {
+      const c = this.ctx, W = this.W, H = this.H, r = this.ride, t = this.tick / 60;
+      const sky = c.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, "#9FD8F2"); sky.addColorStop(0.7, "#E4F5FB"); sky.addColorStop(1, "#CFEFD9");
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      c.fillStyle = "#FFD866"; c.beginPath(); c.arc(W * 0.85, H * 0.08, W * 0.06, 0, Math.PI * 2); c.fill();
+      if (r.kind === "slide") {
+        // the park lawn, and the slide big in the middle
+        c.fillStyle = "#A6D177"; c.fillRect(0, H * 0.78, W, H * 0.22);
+        const T = Math.min(W / 7.5, H / 10);
+        const x = W / 2 - 3.2 * T, y = H * 0.78 - 6 * T;
+        D.landmark(c, "slide", x, y, 6 * T, 6 * T, T, t);
+        const climb = Math.min(1, r.t / 110), k = Math.max(0, Math.min(1, (r.t - 120) / 150));
+        let px, py, dir = "up";
+        if (r.t < 115) { px = x + T * 1.1; py = y + 5.6 * T - climb * 6.3 * T; }
+        else {
+          const e = k * k;                               // speeds up as you go
+          [px, py] = D.slidePoint(x, y, 6 * T, 6 * T, T, 1, e);
+          py += T * 0.25; dir = "right";
+        }
+        D.person(c, "hero", dir, px, py, T, r.t < 115 ? (r.t / 20) % 1 : null, t);
+        if (r.t > 125 && r.t < 280) this.speech(c, ["Wheee!", "Woo-hoo!", "So fast!"][Math.floor((r.t - 125) / 52) % 3], px, py - T * 1.4);
+        if (r.t > 270) for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 + t, d = (r.t - 270) * T * 0.04;
+          c.fillStyle = ["#F7D35C", "#F28DA8", "#5EC2E8"][i % 3]; c.fillRect(px + Math.cos(a) * d, py - T * 0.6 + Math.sin(a) * d, T * 0.12, T * 0.12);
+        }
+      } else {
+        // the bay far below, and the wheel turning with you in the highlighted car
+        c.fillStyle = "#7DB35A"; c.fillRect(0, H * 0.8, W, H * 0.2);
+        const T = Math.min(W / 8, H / 11);
+        const turn = Math.PI / 2 - (r.t / r.frames) * Math.PI * 2;   // your car starts at the bottom
+        const x = W / 2 - 3.5 * T, y = H * 0.8 - 6 * T;
+        const path = new Path2D(); path.rect(0, H * 0.7, W, H * 0.1);
+        D.water(c, this.dpr, path, 0, 0, t);
+        const g = D.LANDMARKS.wheel(c, x, y, 7 * T, 6 * T, T, t, turn, 0);
+        const gx = g.cx + Math.cos(turn) * g.R, gy = g.cy + Math.sin(turn) * g.R;
+        c.save(); c.beginPath(); c.rect(gx - T, gy - T * 2, T * 2, T * 2.5); c.clip();
+        D.person(c, "hero", "down", gx, gy + T * 0.95, T * 0.75, null, t);
+        c.restore();
+        const high = gy < g.cy - g.R * 0.6;
+        if (high) this.speech(c, "I can see Forbes Bay!", gx, gy - T * 0.5);
+      }
+      c.font = `${Math.round(Math.min(W, H) * 0.04)}px "Patrick Hand", sans-serif`;
+      c.fillStyle = "rgba(58,51,48,.7)"; c.textAlign = "center";
+      if (r.t > 60) c.fillText("B: skip", W / 2, H - 14);
+      c.textAlign = "start";
     },
 
     /* ---------------- quests ---------------- */
@@ -711,11 +841,19 @@
       if (person) {
         if (!person.moving) person.dir = OPPOSITE[p.dir];
         if (this.questTalk(person)) return;
+        if (person.action === "ride") {
+          const R = RIDES[person.ride];
+          return this.quiz(R.questions, person.talk, () => this.startRide(person.ride));
+        }
         if (person.action === "fishing") return this.say(person.talk, () => this.fishingQuestion());
         if (person.look === "squirrel" && Object.keys(QUESTS).some((id) => QUESTS[id].to === person.id && this.questsDone.includes(id))) {
           return this.say([`${person.name}: My friend! Thanks again for your help. Chitter chitter!`]);
         }
         return this.say(person.talk);
+      }
+      const gate = (this.map.gates || []).find((g) => g.x === fx && g.y === fy);
+      if (gate) {
+        return this.quiz(gate.questions, [`TICKET BOOTH: Welcome to ${gate.name}!`, `Answer ${gate.questions} questions in a row to get in.`], () => this.enterGate(gate));
       }
       const item = this.itemAt(fx, fy);
       if (item && item.kind === "bike") return this.getOn(item);
@@ -873,7 +1011,8 @@
     /* ---------------- fishing with Uncle Pat ---------------- */
     fishingQuestion() {
       const q = makeQuestion(this.mode);
-      const solved = q.text.replace("?", q.answer);
+      this.quizQ = q;
+      const solved = q.why || q.text.replace("?", q.answer);
       this.openMenu({
         kind: "answers",
         title: q.text,
@@ -1101,7 +1240,7 @@
 
     answer(v) {
       const b = this.battle;
-      const solved = b.q.fact ? b.q.why : b.q.text.replace("?", b.q.answer);
+      const solved = b.q.why || b.q.text.replace("?", b.q.answer);
       if (v === b.q.answer) {
         b.hearts++;
         b.hop = 24;
@@ -1160,6 +1299,7 @@
       c.fillRect(0, 0, this.W, this.H);
       if (this.scene === "battle") this.drawBattle();
       else if (this.scene === "fishing") this.drawFishing();
+      else if (this.scene === "ride") this.drawRide();
       else this.drawWorld();
       if (this.fade) this.drawFade();
     },
@@ -1229,6 +1369,8 @@
         } })),
         ...actors.map((a) => ({ y: a.at.y + 0.95, tx: Math.round(a.at.x), ty: Math.round(a.at.y), actor: true,
           cx: a.at.x * T + T / 2 - camX, base: a.at.y * T + T * 0.9 - camY, draw: (cc) => this.drawActor(a, camX, camY, t, cc) })),
+        ...(this.map.landmarks || []).map((L) => ({ y: L.y + L.h, tx: L.x, ty: L.y + L.h - 1, cx: (L.x + L.w / 2) * T - camX, base: (L.y + L.h) * T - camY,
+          draw: (cc) => D.landmark(cc, L.kind, L.x * T - camX, L.y * T - camY, L.w * T, L.h * T, T, t) })),
         ...this.pickups.map((it) => ({ y: it.y + 0.5, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.8 - camY,
           draw: (cc) => D.pickup(cc, it.kind, it.x * T + T / 2 - camX, it.y * T + T * 0.6 - camY, T, t) })),
         ...this.items.map((it) => ({ y: it.y + 0.9, tx: it.x, ty: it.y, cx: it.x * T + T / 2 - camX, base: it.y * T + T * 0.92 - camY,
