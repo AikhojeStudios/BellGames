@@ -1377,7 +1377,7 @@
       c.beginPath(); c.roundRect(x - T * 0.1, y - T * 2.05, w + T * 0.2, T * 0.75, T * 0.3); paint(c, "#7C5CD6", lw);
       c.font = `bold ${Math.round(T * 0.42)}px Fredoka, Nunito, sans-serif`;
       c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#FFE9A6";
-      c.fillText("FUN PARK", x + w / 2, y - T * 1.67);
+      c.fillText("7 GARTERS", x + w / 2, y - T * 1.67);
       c.textAlign = "start"; c.textBaseline = "alphabetic";
       // lights along the arch
       for (let i = 0; i < 8; i++) {

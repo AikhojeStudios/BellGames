@@ -451,7 +451,7 @@
           note: `${streak} of ${n} in a row`,
           onPick: (i) => {
             this.menu = null;
-            const why = q.fact ? q.why : q.text.replace("?", q.answer);
+            const why = q.why || q.text.replace("?", q.answer);
             if (q.choices[i] === q.answer) {
               streak++;
               sfx.right();
@@ -1011,7 +1011,8 @@
     /* ---------------- fishing with Uncle Pat ---------------- */
     fishingQuestion() {
       const q = makeQuestion(this.mode);
-      const solved = q.text.replace("?", q.answer);
+      this.quizQ = q;
+      const solved = q.why || q.text.replace("?", q.answer);
       this.openMenu({
         kind: "answers",
         title: q.text,
@@ -1239,7 +1240,7 @@
 
     answer(v) {
       const b = this.battle;
-      const solved = b.q.fact ? b.q.why : b.q.text.replace("?", b.q.answer);
+      const solved = b.q.why || b.q.text.replace("?", b.q.answer);
       if (v === b.q.answer) {
         b.hearts++;
         b.hop = 24;
