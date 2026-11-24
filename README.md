@@ -78,6 +78,8 @@ Quests are data in `QUESTS` in `world.js`: who gives it (`giver`), who it's hand
 
 **Wagon:** a red wagon waits by Our House. Press A on it and little brother hops in; push him around (a bit faster than walking) while he cheers in speech bubbles. B parks it where you are; it won't go in water or indoors (it parks outside the door).  Uncle Pat's rowboat is tied up at the end of the dock. Face it and press A to climb in, steer around the water, then face the dock or shore and press B to step out; it stays where you leave it. **Sea routes:** a warp with `byBoat: true` only works when you sail onto it, and your boat comes along to the new map, so new places can be reached by water (there's an example in `world.js`).
 
+**Lush graphics** (outdoors): tall grass drawn blade by blade and swaying in rolling gusts of wind (it sways over your legs as you walk through), soft shadows from trees, houses and rides, cloud shadows drifting across the map, warm afternoon light with faint sunbeams, haze and a vignette, petals and leaves on the breeze, and speed lines when riding the bike. The ☰ menu switches between **Graphics: Lush** and **Simple** (lighter for older phones); the choice is saved. Effects are calmer when the device asks for reduced motion.
+
 Controls: drag the joystick to walk, A to talk and choose, B to go back, ☰ for the menu. On a keyboard: arrows or WASD walk, Z / Space / Enter is A, X / Backspace is B, Shift or M opens the menu.
 
 ### The Crescent Drive map

@@ -149,6 +149,12 @@
         ink(c, s * 0.03, C.lawnDark);
       }
     },
+    /** The ground under swaying grass: the blades themselves are drawn live by grassLayer(). */
+    tallBase(c, s, r) {
+      c.fillStyle = C.tall; c.fillRect(0, 0, s, s);
+      // tiny flecks only (bigger patches would show the square tile edges)
+      for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? "rgba(60,110,40,.22)" : "rgba(200,232,150,.3)"; c.fillRect(r() * s, r() * s, s * 0.03, s * 0.03); }
+    },
     tall(c, s, r) {
       c.fillStyle = C.tall; c.fillRect(0, 0, s, s);
       for (let i = 0; i < 9; i++) {
@@ -623,6 +629,77 @@
     c.globalAlpha = 0.6 + Math.sin(t * 1.4) * 0.25;
     c.fillStyle = shine; c.fill(path);
     c.globalAlpha = 1;
+  }
+
+  /* ---------- the lush look: grass in the wind, shadows, light ---------- */
+
+  const bladeCache = new Map();
+  /** Blade positions for one tile of tall grass (the same every frame). */
+  function bladesFor(wx, wy) {
+    const key = wx + "," + wy;
+    let b = bladeCache.get(key);
+    if (!b) {
+      const r = rng(hash(wx, wy, 77) + 1);
+      b = Array.from({ length: 8 }, () => ({ x: r(), y: 0.3 + r() * 0.75, h: 0.24 + r() * 0.24, lean: (r() - 0.5) * 0.25, tone: r() }));
+      if (bladeCache.size > 5000) bladeCache.clear();
+      bladeCache.set(key, b);
+    }
+    return b;
+  }
+
+  /** How far the wind bends grass at a spot in the world, and how bright the gust is there. */
+  function wind(wx, wy, t) {
+    const wave = Math.sin(t * 1.7 - (wx * 0.45 + wy * 0.22));
+    const gust = Math.max(0, Math.sin(t * 0.55 - wx * 0.13 - wy * 0.05)) ** 3;
+    return { bend: wave * 0.07 + gust * 0.16, gust };
+  }
+
+  /**
+   * Draw swaying blades for tiles of tall grass. tiles: [{ wx, wy, sx, sy }]
+   * (world tile and its screen position). All blades go into three paths, so
+   * a screenful of grass is only a handful of strokes.
+   */
+  function grassLayer(c, tiles, s, t, calm = 1) {
+    const dark = new Path2D(), mid = new Path2D(), lite = new Path2D();
+    for (const { wx, wy, sx, sy } of tiles) {
+      const w = wind(wx, wy, t);
+      for (const bl of bladesFor(wx, wy)) {
+        const bx = sx + bl.x * s, by = sy + bl.y * s, hh = bl.h * s;
+        const tip = (bl.lean + w.bend * calm) * s * (0.6 + bl.h);
+        const path = w.gust > 0.45 && bl.tone > 0.5 ? lite : bl.tone < 0.4 ? dark : mid;
+        path.moveTo(bx - s * 0.035, by);
+        path.quadraticCurveTo(bx + tip * 0.3, by - hh * 0.55, bx + tip, by - hh);
+        path.moveTo(bx + s * 0.035, by);
+        path.quadraticCurveTo(bx + tip * 0.4 + s * 0.03, by - hh * 0.5, bx + tip + s * 0.02, by - hh * 0.85);
+      }
+    }
+    c.lineCap = "round";
+    c.lineWidth = s * 0.05;
+    c.strokeStyle = "#3F7A32"; c.stroke(dark);
+    c.strokeStyle = C.blade; c.stroke(mid);
+    c.strokeStyle = "#C6E896"; c.stroke(lite);
+  }
+
+  /** Warm afternoon light over the whole view: sunbeams, a soft glow, gentle haze and a vignette. */
+  function light(c, W, H, t) {
+    const warm = c.createLinearGradient(0, 0, W, H);
+    warm.addColorStop(0, "rgba(255,210,130,.22)"); warm.addColorStop(0.55, "rgba(255,240,200,0)"); warm.addColorStop(1, "rgba(60,80,150,.10)");
+    c.fillStyle = warm; c.fillRect(0, 0, W, H);
+    // faint sunbeams slanting down from the top left
+    c.save();
+    c.globalAlpha = 0.07;
+    c.fillStyle = "#FFF6D6";
+    for (let i = 0; i < 3; i++) {
+      const x = ((t * 6 + i * W * 0.45) % (W * 1.6)) - W * 0.3;
+      c.beginPath(); c.moveTo(x, -10); c.lineTo(x + W * 0.12, -10); c.lineTo(x + W * 0.12 + H * 0.6, H + 10); c.lineTo(x + H * 0.6, H + 10); c.closePath(); c.fill();
+    }
+    c.restore();
+    const haze = c.createLinearGradient(0, 0, 0, H * 0.22);
+    haze.addColorStop(0, "rgba(225,242,255,.28)"); haze.addColorStop(1, "rgba(225,242,255,0)");
+    c.fillStyle = haze; c.fillRect(0, 0, W, H * 0.22);
+    const vig = c.createRadialGradient(W / 2, H * 0.48, Math.min(W, H) * 0.35, W / 2, H * 0.48, Math.max(W, H) * 0.75);
+    vig.addColorStop(0, "rgba(20,40,30,0)"); vig.addColorStop(1, "rgba(20,40,30,.22)");
+    c.fillStyle = vig; c.fillRect(0, 0, W, H);
   }
 
   /* ---------- caches: each tile look is drawn once per size ---------- */
@@ -1405,5 +1482,5 @@
     return cv;
   }
 
-  A.draw = { C, ground, object, person, critter, silhouette, water, boat, wagon, pickup, landmark, LANDMARKS, slidePoint, blob, rectPts, ellipsePts, rng, paint, line };
+  A.draw = { C, grassLayer, light, wind, ground, object, person, critter, silhouette, water, boat, wagon, pickup, landmark, LANDMARKS, slidePoint, blob, rectPts, ellipsePts, rng, paint, line };
 })();

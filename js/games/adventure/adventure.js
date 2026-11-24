@@ -430,6 +430,9 @@
       p.ease = !this.boating && (this.tileAt(nx, ny).swim || this.tileAt(p.fromX, p.fromY).swim);
     },
 
+    /** Lush graphics (swaying grass, shadows, light) unless switched to Simple in the menu. */
+    lush() { return App.Store.get("lush", true); },
+
     /* ---------------- question streaks (park gate and rides) ---------------- */
     /**
      * Ask questions until n are answered right in a row; one wrong resets the
@@ -1172,10 +1175,14 @@
         kind: "start",
         title: "Menu",
         note: "Map data © OpenStreetMap contributors",
-        items: ["Critter Book", "Close"],
+        items: ["Critter Book", `Graphics: ${this.lush() ? "Lush" : "Simple"}`, "Close"],
         onPick: (i) => {
           this.menu = null;
           if (i === 0) { this.scene = "book"; this.bookDirty = true; }
+          if (i === 1) {
+            App.Store.set("lush", !this.lush());
+            this.say([this.lush() ? "Graphics: Lush. Grass sways, clouds drift, the sun glows." : "Graphics: Simple. Lighter on older phones."]);
+          }
         },
         onBack: () => { this.menu = null; },
       });
@@ -1305,6 +1312,7 @@
       else if (this.scene === "fishing") this.drawFishing();
       else if (this.scene === "ride") this.drawRide();
       else this.drawWorld();
+      if (this.lush() && !this.map.indoors && this.scene !== "battle" && this.scene !== "ride") D.light(c, this.W, this.H, this.tick / 60);
       if (this.fade) this.drawFade();
     },
 
@@ -1334,8 +1342,10 @@
         const g = TILES[ch]?.ground;
         return (g === "water" || g === "dock") && !AD.assets.tiles[ch];
       };
-      const objects = [], wet = [], docks = [];
+      const objects = [], wet = [], docks = [], grassTiles = [];
       const waterPath = new Path2D();
+      const lush = this.lush() && !this.map.indoors;
+      const calm = App.util.reduceMotion ? 0.3 : 1;
       for (let ty = y0; ty <= y1; ty++) {
         for (let tx = x0; tx <= x1; tx++) {
           const ch = this.charAt(tx, ty);
@@ -1355,6 +1365,7 @@
                 if (nt && !nt.object && !nt.solid && nt.ground !== "floor" && ["carpet", "bathroom", "kitchen", "concrete"].includes(nt.ground)) { gname = nt.ground; break; }
               }
             }
+            if (lush && gname === "tall") { gname = "tallBase"; grassTiles.push({ wx: tx, wy: ty, sx, sy }); }
             D.ground(c, gname, ch, sx, sy, T, dpr, AD.maskOf(same(tx, ty, ch)), variant);
           }
           if (tile.object) objects.push({ y: ty + 1, tx, ty, ch, tile, sx, sy, variant });
@@ -1419,7 +1430,25 @@
         this.drawSurfaceFx(c, camX, camY, waterPath);
       }
 
+      if (lush) {
+        D.grassLayer(c, grassTiles, T, t, calm);
+        // soft shadows from trees and houses, with the sun up and to the left
+        const shade = new Path2D();
+        for (const o of objects) {
+          if (o.tile.object === "tree") shade.ellipse(o.sx + T * 0.78, o.sy + T * 0.82, T * 0.62, T * 0.3, 0, 0, Math.PI * 2);
+          else if (o.tile.object === "house") shade.rect(o.sx + T * 0.32, o.sy + T * 0.32, T, T);
+        }
+        for (const L of this.map.landmarks || []) {
+          if (L.kind === "wheel" || L.kind === "slide") shade.ellipse((L.x + L.w * 0.6) * T - camX, (L.y + L.h) * T - camY, L.w * T * 0.55, T * 0.7, 0, 0, Math.PI * 2);
+        }
+        // three slightly offset layers make a soft edge without a costly blur
+        c.fillStyle = "rgba(25,45,20,.08)";
+        for (const [ox, oy] of [[0, 0], [T * 0.07, T * 0.06], [-T * 0.06, -T * 0.05]]) { c.save(); c.translate(ox, oy); c.fill(shade); c.restore(); }
+      }
+
       things.forEach((it) => it.draw(c));
+
+      if (lush) this.drawAtmosphere(c, camX, camY, pp, t, calm);
       this.drawDrops(c, camX, camY);
       if (!this.wagoning && this.bubble && this.tick < this.bubble.until && this.wagon && this.wagon.map === this.mapId) {
         this.speech(c, this.bubble.text, this.wagon.x * T + T / 2 - camX, this.wagon.y * T - camY - T * 0.3);
@@ -1470,7 +1499,8 @@
         const sx = gx * T - camX, sy = gy * T - camY;
         c.save();
         c.beginPath(); c.rect(sx - T * 0.2, sy + T * 0.62, T * 1.4, T * 0.5); c.clip();
-        D.ground(c, "tall", ",", sx, sy, T, this.dpr, 0, AD.hash(gx, gy) % 4);
+        if (this.lush()) D.grassLayer(c, [{ wx: gx, wy: gy, sx, sy }], T, t, App.util.reduceMotion ? 0.3 : 1);
+        else D.ground(c, "tall", ",", sx, sy, T, this.dpr, 0, AD.hash(gx, gy) % 4);
         c.restore();
       }
     },
@@ -1490,7 +1520,8 @@
       }
       for (let i = 0; i < (b.water ? 0 : 18); i++) {
         const x = r() * W, y = H * (0.55 + r() * 0.4), k = 10 + r() * 8;
-        c.beginPath(); c.moveTo(x - 4, y); c.quadraticCurveTo(x - 2, y - k / 2, x, y - k); c.moveTo(x + 4, y); c.quadraticCurveTo(x + 2, y - k / 2, x + 3, y - k * 0.8);
+        const sw = Math.sin(t * 1.7 - x * 0.02) * k * 0.35;
+        c.beginPath(); c.moveTo(x - 4, y); c.quadraticCurveTo(x - 2 + sw * 0.3, y - k / 2, x + sw, y - k); c.moveTo(x + 4, y); c.quadraticCurveTo(x + 2 + sw * 0.3, y - k / 2, x + 3 + sw, y - k * 0.8);
         c.strokeStyle = D.C.blade; c.lineWidth = 2; c.lineCap = "round"; c.stroke();
       }
 
@@ -1516,6 +1547,54 @@
         c.restore();
         this.ripples(hx, H * 0.66 - s * 0.35, s, t);
       } else D.person(c, "hero", "up", W * 0.28 - (1 - ease) * W * 0.7, H * 0.66, s, null, t);
+    },
+
+    /** Cloud shadows drifting over the land, speed lines on the bike, and petals on the breeze. */
+    drawAtmosphere(c, camX, camY, pp, t, calm) {
+      const T = this.T, W = this.W, H = this.H;
+      // cloud shadows, in world space so they slide across the map
+      const mw = this.map.tiles[0].length + 30, mh = this.map.tiles.length + 20;
+      for (let i = 0; i < 4; i++) {
+        const wx = ((i * 37.3 + t * 0.35) % mw) - 15, wy = ((i * 13.7) % mh) - 10 + Math.sin(t * 0.05 + i) * 2;
+        const x = wx * T - camX, y = wy * T - camY, r = T * (4 + (i % 2) * 2);
+        if (x < -r * 2 || x > W + r * 2 || y < -r * 2 || y > H + r * 2) continue;
+        const g = c.createRadialGradient(x, y, r * 0.2, x, y, r);
+        g.addColorStop(0, "rgba(30,50,70,.13)"); g.addColorStop(1, "rgba(30,50,70,0)");
+        c.save(); c.translate(x, y); c.scale(1.6, 1); c.translate(-x, -y);
+        c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2);
+        c.restore();
+      }
+      // speed lines while riding
+      const p = this.player;
+      if (this.riding && p.moving) {
+        const [dx, dy] = DIRS[p.dir];
+        const cx = (pp.x + 0.5) * T - camX, cy = (pp.y + 0.5) * T - camY;
+        c.strokeStyle = "rgba(255,255,255,.65)"; c.lineCap = "round";
+        for (let i = 0; i < 7; i++) {
+          const off = ((i * 37 + this.tick * 3) % 60) / 60;
+          const side = (((i * 53) % 11) - 5) * T * 0.14;
+          const sx = cx - dx * T * (0.4 + off * 1.4) - dy * side, sy = cy - dy * T * (0.4 + off * 1.4) + dx * side - T * 0.2;
+          c.globalAlpha = 1 - off; c.lineWidth = Math.max(1.5, T * 0.04);
+          c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - dx * T * 0.7, sy - dy * T * 0.7); c.stroke();
+        }
+        c.globalAlpha = 1;
+      }
+      // petals and leaves on the breeze (screen space)
+      if (calm < 1) return;
+      if (!this.petals) {
+        this.petals = Array.from({ length: 16 }, (_, i) => ({ x: Math.random() * W, y: Math.random() * H, s: 0.6 + Math.random() * 0.6, k: i % 3, ph: Math.random() * 6 }));
+      }
+      const gustNow = D.wind(camX / T, camY / T, t).gust;
+      for (const f of this.petals) {
+        f.x += (0.6 + gustNow * 1.6) * f.s;
+        f.y += Math.sin(t * 2 + f.ph) * 0.35 + 0.12;
+        if (f.x > W + 10) { f.x = -10; f.y = Math.random() * H; }
+        if (f.y > H + 10) f.y = -10;
+        c.save(); c.translate(f.x, f.y); c.rotate(t * 2 * f.s + f.ph);
+        c.fillStyle = f.k === 0 ? "rgba(246,160,190,.85)" : f.k === 1 ? "rgba(255,255,255,.85)" : "rgba(120,180,80,.85)";
+        c.beginPath(); c.ellipse(0, 0, T * 0.09 * f.s, T * 0.045 * f.s, 0, 0, Math.PI * 2); c.fill();
+        c.restore();
+      }
     },
 
     /** A little speech bubble (little brother's chatter). */
